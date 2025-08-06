@@ -16,6 +16,20 @@ class Settings(BaseSettings):
     retry_backoff_factor: float = Field(2.0, env="RETRY_BACKOFF_FACTOR")
     circuit_breaker_threshold: int = Field(5, env="CIRCUIT_BREAKER_THRESHOLD")
     
+    # Ory Cloud OAuth2 Configuration
+    ory_project_slug: str = Field(..., env="ORY_PROJECT_SLUG")
+    oauth2_client_id: str = Field(..., env="OAUTH2_CLIENT_ID")
+    oauth2_client_secret: str = Field(..., env="OAUTH2_CLIENT_SECRET")
+    oauth2_scope: str = Field("read write", env="OAUTH2_SCOPE")
+    
+    @property
+    def hydra_admin_url(self) -> str:
+        return f"https://{self.ory_project_slug}.projects.oryapis.com/admin"
+    
+    @property
+    def hydra_public_url(self) -> str:
+        return f"https://{self.ory_project_slug}.projects.oryapis.com"
+    
     log_level: str = Field("INFO", env="LOG_LEVEL")
     
     class Config:

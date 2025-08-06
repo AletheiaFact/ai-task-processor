@@ -6,6 +6,7 @@ from ..models import Task, TaskResult, TaskStatus
 from ..config import settings
 from ..utils import get_logger, retry, RetryableError, NonRetryableError
 from .metrics import metrics
+from .ory_auth import ory_auth
 
 logger = get_logger(__name__)
 
@@ -67,6 +68,15 @@ class APIClient:
         if self._client:
             await self._client.aclose()
     
+    async def _get_auth_headers(self) -> Dict[str, str]:
+        """Get authorization headers with OAuth2 token"""
+        try:
+            access_token = await ory_auth.get_access_token()
+            return {"Authorization": f"Bearer {access_token}"}
+        except Exception as e:
+            logger.error("Failed to get OAuth2 token", error=str(e))
+            raise NonRetryableError(f"Authentication failed: {str(e)}")
+    
     @retry(
         retryable_exceptions=(httpx.RequestError, httpx.HTTPStatusError),
         non_retryable_exceptions=(NonRetryableError,)
@@ -78,11 +88,22 @@ class APIClient:
         url = f"{self.base_url}{endpoint}"
         start_time = time.time()
         
+        # Add OAuth2 authorization headers
+        auth_headers = await self._get_auth_headers()
+        headers = kwargs.get("headers", {})
+        headers.update(auth_headers)
+        kwargs["headers"] = headers
+        
         async def request():
             response = await self._client.request(method, url, **kwargs)
             
             if response.status_code >= 500:
                 raise RetryableError(f"Server error: {response.status_code}")
+            elif response.status_code == 401:
+                # Token might be expired, clear cache and retry once
+                ory_auth._access_token = None
+                ory_auth._token_expires_at = None
+                raise RetryableError("Authentication failed, token may be expired")
             elif response.status_code >= 400:
                 raise NonRetryableError(f"Client error: {response.status_code}")
             
