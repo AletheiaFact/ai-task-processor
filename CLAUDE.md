@@ -13,7 +13,7 @@ pip install -r requirements.txt
 **Set up environment:**
 ```bash
 cp .env.example .env
-# Edit .env with your API_BASE_URL and OPENAI_API_KEY
+# Edit .env with your configuration (see Configuration section)
 ```
 
 **Run the application:**
@@ -21,18 +21,21 @@ cp .env.example .env
 python run.py
 ```
 
-### Docker Development
-**Run with Docker Compose (recommended):**
+### Docker Development (Recommended)
+**Run with Docker Compose:**
 ```bash
 # Set environment variables
 cp .env.example .env
 # Edit .env with your configuration
 
-# Start the service with monitoring stack
+# Start all services (AI processor + monitoring)
 docker-compose up -d
 
 # Start only the AI task processor
 docker-compose up -d ai-task-processor
+
+# Start with monitoring stack
+docker-compose up -d ai-task-processor prometheus grafana
 
 # View logs
 docker-compose logs -f ai-task-processor
@@ -41,39 +44,55 @@ docker-compose logs -f ai-task-processor
 docker-compose down
 ```
 
-**Build and run Docker image directly:**
-```bash
-docker build -t ai-task-processor .
-docker run -d \
-  --name ai-task-processor \
-  -p 8001:8001 \
-  -e API_BASE_URL=your_api_url \
-  -e OPENAI_API_KEY=your_key \
-  ai-task-processor
-```
+### Required Configuration
+Before running, configure these required environment variables in `.env`:
+
+**API Integration:**
+- `API_BASE_URL`: Your NestJS API endpoint (e.g., `http://host.docker.internal:3000`)
+
+**OAuth2/Ory Cloud Authentication:**
+- `ORY_PROJECT_SLUG`: Your Ory Cloud project slug
+- `OAUTH2_CLIENT_ID`: OAuth2 client ID from Ory Cloud
+- `OAUTH2_CLIENT_SECRET`: OAuth2 client secret from Ory Cloud
+- `OAUTH2_SCOPE`: OAuth2 scopes (default: "read write")
+
+**OpenAI (Optional):**
+- `OPENAI_API_KEY`: OpenAI API key (leave as placeholder to use mock processing)
 
 ### Monitoring Stack
-The Docker Compose setup includes optional monitoring:
+The Docker Compose setup includes comprehensive monitoring:
 - **Prometheus**: Metrics collection at `http://localhost:9090`
 - **Grafana**: Visualization at `http://localhost:3001` (admin/admin)
+- **AI Task Processor**: Health and metrics at `http://localhost:8001`
 
 ## Architecture Overview
 
-This is an **AI Task Processor** service that polls an external API for AI tasks, processes them using OpenAI, and reports results back. The architecture follows a **producer-consumer pattern** with these key components:
+This is an **AI Task Processor** service that polls an external NestJS API for AI tasks, processes them using OpenAI (or mock processing), and reports results back. The architecture follows a **producer-consumer pattern** with these key components:
 
 ### Core Flow
-1. **TaskScheduler** polls `/api/ai-tasks/pending` every 30 seconds
-2. **ProcessorFactory** routes tasks to appropriate processors based on task type
-3. **Processors** execute AI operations (currently text embeddings via OpenAI)
-4. **APIClient** updates task status via PATCH `/api/ai-tasks/:id`
-5. **MetricsServer** exposes Prometheus metrics at `:8001/metrics`
+1. **OAuth2 Authentication** - Authenticates with Ory Cloud using client credentials flow
+2. **TaskScheduler** - Polls `/api/ai-tasks/pending` every 30 seconds with Bearer token
+3. **ProcessorFactory** - Routes tasks to appropriate processors based on task type
+4. **Processors** - Execute AI operations (text embeddings via OpenAI or mock data)
+5. **APIClient** - Updates task status via PATCH `/api/ai-tasks/:id` with results
+6. **MetricsServer** - Exposes Prometheus metrics at `:8001/metrics`
 
 ### Key Architectural Patterns
+
+**OAuth2 Authentication**: Ory Cloud integration with automatic token refresh:
+- Client credentials flow for machine-to-machine authentication
+- Token caching with automatic refresh before expiry
+- Circuit breaker integration for auth failures
 
 **Processor Pattern**: New AI task types are added by:
 1. Creating a processor class inheriting from `BaseProcessor`
 2. Implementing `process()` and `can_process()` methods  
 3. Registering it in `ProcessorFactory._processors`
+
+**Mock Processing**: When `OPENAI_API_KEY=your_openai_api_key_here` (placeholder), the system uses mock data:
+- Generates realistic embedding vectors for testing
+- Supports flexible content formats (string or dictionary)
+- Full end-to-end testing without API costs
 
 **Circuit Breaker**: `APIClient` includes circuit breaker logic to handle API failures gracefully - switches to "open" state after 5 consecutive failures, then "half-open" for recovery testing.
 
@@ -84,10 +103,25 @@ This is an **AI Task Processor** service that polls an external API for AI tasks
 ## Configuration System
 
 All configuration via environment variables through Pydantic Settings in `config/settings.py`. Key settings:
-- `CONCURRENCY_LIMIT`: Max simultaneous task processing (default: 5)
+
+**Core Settings:**
+- `API_BASE_URL`: Target NestJS API endpoint for task retrieval/updates
 - `POLLING_INTERVAL_SECONDS`: Task polling frequency (default: 30)
-- `API_BASE_URL`: Target API endpoint for task retrieval/updates
-- `OPENAI_API_KEY`: Required for text embedding operations
+- `CONCURRENCY_LIMIT`: Max simultaneous task processing (default: 5)
+
+**Authentication (Required):**
+- `ORY_PROJECT_SLUG`: Ory Cloud project identifier
+- `OAUTH2_CLIENT_ID`: OAuth2 client ID for machine-to-machine auth
+- `OAUTH2_CLIENT_SECRET`: OAuth2 client secret
+- `OAUTH2_SCOPE`: OAuth2 scopes (default: "read write")
+
+**AI Processing:**
+- `OPENAI_API_KEY`: OpenAI API key (use placeholder for mock processing)
+
+**Advanced Settings:**
+- `MAX_RETRIES`: Retry attempts for failed operations (default: 3)
+- `CIRCUIT_BREAKER_THRESHOLD`: Failures before circuit breaker opens (default: 5)
+- `METRICS_PORT`: Prometheus metrics server port (default: 8001)
 
 ## Monitoring & Observability
 
@@ -96,6 +130,7 @@ All configuration via environment variables through Pydantic Settings in `config
 **Prometheus Metrics**: Comprehensive metrics collection including:
 - Task processing duration and counts by type/status
 - API request metrics with endpoint/method/status_code labels  
+- OAuth2 authentication metrics (token generation, failures)
 - OpenAI usage tracking (tokens by model/type)
 - Circuit breaker state monitoring
 
@@ -123,3 +158,36 @@ Follow the pattern in `services/openai_client.py` - create dedicated client with
 - Generic `Exception`: Caught and logged, typically treated as non-retryable
 
 **Task-level resilience**: Failed tasks are marked as `FAILED` status with error messages, but don't crash the entire service.
+
+## NestJS API Integration
+
+The service integrates with a NestJS API that expects specific task and response formats:
+
+**Expected Task Format:**
+```typescript
+{
+  _id: string,
+  type: "text-embedding",
+  state: "pending" | "in_progress" | "succeeded" | "failed",
+  content: string | { text: string, model?: string },
+  callbackRoute: "verification.updateEmbedding",
+  callbackParams: { targetId: string, field: string },
+  createdAt: Date,
+  updatedAt?: Date
+}
+```
+
+**Update Response Format:**
+```typescript
+{
+  state: "succeeded" | "failed",
+  result: number[] | null  // For embeddings: array of floats
+}
+```
+
+**Required NestJS M2M Guard Configuration:**
+```typescript
+// Update your M2M guard to use correct config paths:
+const hydraBasePath = this.configService.get<string>("ory.admin_url");
+const introspectionToken = this.configService.get<string>("ory.access_token");
+```
