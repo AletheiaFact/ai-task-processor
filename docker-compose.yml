@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  ai-task-processor:
+    build: .
+    container_name: ai-task-processor
+    environment:
+      - API_BASE_URL=${API_BASE_URL:-http://host.docker.internal:3000}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - POLLING_INTERVAL_SECONDS=${POLLING_INTERVAL_SECONDS:-30}
+      - CONCURRENCY_LIMIT=${CONCURRENCY_LIMIT:-5}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+      - METRICS_PORT=8001
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-30}
+      - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-60}
+      - RETRY_BACKOFF_FACTOR=${RETRY_BACKOFF_FACTOR:-2.0}
+      - CIRCUIT_BREAKER_THRESHOLD=${CIRCUIT_BREAKER_THRESHOLD:-5}
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    restart: unless-stopped
+
+  # Optional: Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:
