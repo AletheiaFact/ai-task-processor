@@ -6,7 +6,7 @@ from datetime import datetime
 
 class TaskStatus(str, Enum):
     PENDING = "pending"
-    PROCESSING = "processing"
+    IN_PROGRESS = "in_progress"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
 
@@ -15,16 +15,22 @@ class TaskType(str, Enum):
     TEXT_EMBEDDING = "text-embedding"
 
 
+class CallbackRoute(str, Enum):
+    VERIFICATION_UPDATE_EMBEDDING = "verification.updateEmbedding"
+
+
 class Task(BaseModel):
-    id: str
+    id: str = Field(alias="_id")
     type: TaskType
-    status: TaskStatus
-    input_data: Dict[str, Any]
-    output_data: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-    retry_count: int = 0
+    status: TaskStatus = Field(alias="state")
+    content: Optional[Any] = None
+    callback_route: CallbackRoute = Field(alias="callbackRoute")
+    callback_params: Dict[str, Any] = Field(alias="callbackParams")
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: Optional[datetime] = Field(default=None, alias="updatedAt")
+    
+    class Config:
+        populate_by_name = True
 
 
 class TaskResult(BaseModel):

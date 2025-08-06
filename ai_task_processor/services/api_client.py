@@ -132,13 +132,17 @@ class APIClient:
     
     async def update_task_status(self, task_id: str, result: TaskResult) -> bool:
         try:
+            # For text embedding tasks, extract just the embedding array
+            result_data = result.output_data
+            if result.status == TaskStatus.SUCCEEDED and result_data and "embedding" in result_data:
+                result_data = result_data["embedding"]
+            
             response = await self._make_request(
                 "PATCH",
                 f"/api/ai-tasks/{task_id}",
                 json={
-                    "status": result.status.value,
-                    "output_data": result.output_data,
-                    "error_message": result.error_message
+                    "state": result.status.value,
+                    "result": result_data
                 }
             )
             return response.status_code == 200
