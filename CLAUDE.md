@@ -167,10 +167,10 @@ The service integrates with a NestJS API that expects specific task and response
 ```typescript
 {
   _id: string,
-  type: "text-embedding",
+  type: "text_embedding",
   state: "pending" | "in_progress" | "succeeded" | "failed",
   content: string | { text: string, model?: string },
-  callbackRoute: "verification.updateEmbedding",
+  callbackRoute: "verification_update_embedding",
   callbackParams: { targetId: string, field: string },
   createdAt: Date,
   updatedAt?: Date

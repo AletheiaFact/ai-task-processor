@@ -104,10 +104,10 @@ Expected task format from NestJS (MongoDB schema):
 ```json
 {
   "_id": "task-id",
-  "type": "text-embedding",
+  "type": "text_embedding",
   "state": "pending",
   "content": {"text": "Text to process", "model": "text-embedding-3-small"},
-  "callbackRoute": "verification.updateEmbedding",
+  "callbackRoute": "verification_update_embedding",
   "callbackParams": {"documentId": "doc-id"},
   "createdAt": "2024-01-01T00:00:00.000Z",
   "updatedAt": null

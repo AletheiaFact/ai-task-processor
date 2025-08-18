@@ -12,11 +12,11 @@ class TaskStatus(str, Enum):
 
 
 class TaskType(str, Enum):
-    TEXT_EMBEDDING = "text-embedding"
+    TEXT_EMBEDDING = "text_embedding"
 
 
 class CallbackRoute(str, Enum):
-    VERIFICATION_UPDATE_EMBEDDING = "verification.updateEmbedding"
+    VERIFICATION_UPDATE_EMBEDDING = "verification_update_embedding"
 
 
 class Task(BaseModel):
