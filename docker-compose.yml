@@ -20,17 +20,41 @@ services:
       - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-60}
       - RETRY_BACKOFF_FACTOR=${RETRY_BACKOFF_FACTOR:-2.0}
       - CIRCUIT_BREAKER_THRESHOLD=${CIRCUIT_BREAKER_THRESHOLD:-5}
+      # Ollama configuration
+      - PROCESSING_MODE=${PROCESSING_MODE:-openai}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-120}
+      - OLLAMA_MAX_RETRIES=${OLLAMA_MAX_RETRIES:-3}
+      - OLLAMA_MODEL_DOWNLOAD_TIMEOUT=${OLLAMA_MODEL_DOWNLOAD_TIMEOUT:-600}
     ports:
       - "8001:8001"
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped
+    depends_on:
+      - ollama
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # Ollama service for local LLM processing
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # Optional: Prometheus for metrics collection
   prometheus:
@@ -63,3 +87,4 @@ services:
 volumes:
   prometheus_data:
   grafana_data:
+  ollama_models:

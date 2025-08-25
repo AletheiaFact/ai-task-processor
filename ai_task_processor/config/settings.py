@@ -1,6 +1,13 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings
 from typing import Optional
+from enum import Enum
+
+
+class ProcessingMode(str, Enum):
+    OPENAI = "openai"
+    OLLAMA = "ollama"
+    HYBRID = "hybrid"  # Ollama first, OpenAI fallback
 
 
 class Settings(BaseSettings):
@@ -15,6 +22,15 @@ class Settings(BaseSettings):
     openai_timeout: int = Field(60, env="OPENAI_TIMEOUT")
     retry_backoff_factor: float = Field(2.0, env="RETRY_BACKOFF_FACTOR")
     circuit_breaker_threshold: int = Field(5, env="CIRCUIT_BREAKER_THRESHOLD")
+    
+    # Processing mode configuration
+    processing_mode: ProcessingMode = Field(ProcessingMode.OPENAI, env="PROCESSING_MODE")
+    
+    # Ollama configuration
+    ollama_base_url: str = Field("http://localhost:11434", env="OLLAMA_BASE_URL")
+    ollama_timeout: int = Field(120, env="OLLAMA_TIMEOUT")
+    ollama_max_retries: int = Field(3, env="OLLAMA_MAX_RETRIES")
+    ollama_model_download_timeout: int = Field(600, env="OLLAMA_MODEL_DOWNLOAD_TIMEOUT")
     
     # Ory Cloud OAuth2 Configuration
     ory_project_slug: str = Field(..., env="ORY_PROJECT_SLUG")

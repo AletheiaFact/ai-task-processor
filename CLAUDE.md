@@ -28,20 +28,39 @@ python run.py
 cp .env.example .env
 # Edit .env with your configuration
 
-# Start all services (AI processor + monitoring)
+# Start all services (AI processor + Ollama + monitoring)
 docker-compose up -d
 
-# Start only the AI task processor
-docker-compose up -d ai-task-processor
+# Start with Ollama for local LLM processing
+docker-compose up -d ollama ai-task-processor
 
 # Start with monitoring stack
 docker-compose up -d ai-task-processor prometheus grafana
 
 # View logs
 docker-compose logs -f ai-task-processor
+docker-compose logs -f ollama
 
 # Stop services
 docker-compose down
+```
+
+### Ollama Local LLM Setup
+**Setup Ollama for local embedding processing:**
+```bash
+# Start Ollama service
+docker-compose up -d ollama
+
+# Download embedding models
+docker-compose exec ollama ollama pull nomic-embed-text
+docker-compose exec ollama ollama pull all-minilm
+docker-compose exec ollama ollama pull mxbai-embed-large
+
+# Set processing mode to use Ollama
+echo "PROCESSING_MODE=ollama" >> .env
+
+# Start AI processor
+docker-compose up -d ai-task-processor
 ```
 
 ### Required Configuration
@@ -117,6 +136,13 @@ All configuration via environment variables through Pydantic Settings in `config
 
 **AI Processing:**
 - `OPENAI_API_KEY`: OpenAI API key (use placeholder for mock processing)
+- `PROCESSING_MODE`: AI processing mode - "openai", "ollama", or "hybrid" (default: "openai")
+
+**Ollama Configuration (when using local LLM processing):**
+- `OLLAMA_BASE_URL`: Ollama server URL (default: "http://localhost:11434")
+- `OLLAMA_TIMEOUT`: Request timeout for Ollama operations (default: 120 seconds)
+- `OLLAMA_MAX_RETRIES`: Max retry attempts for Ollama requests (default: 3)
+- `OLLAMA_MODEL_DOWNLOAD_TIMEOUT`: Timeout for model downloads (default: 600 seconds)
 
 **Advanced Settings:**
 - `MAX_RETRIES`: Retry attempts for failed operations (default: 3)
@@ -132,6 +158,7 @@ All configuration via environment variables through Pydantic Settings in `config
 - API request metrics with endpoint/method/status_code labels  
 - OAuth2 authentication metrics (token generation, failures)
 - OpenAI usage tracking (tokens by model/type)
+- Ollama usage tracking (requests by model/status, estimated tokens)
 - Circuit breaker state monitoring
 
 **Health Endpoints**:

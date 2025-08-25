@@ -43,6 +43,18 @@ openai_tokens_used = Counter(
     ['model', 'type']
 )
 
+ollama_requests_total = Counter(
+    'ollama_requests_total',
+    'Total number of Ollama API requests',
+    ['model', 'status']
+)
+
+ollama_tokens_used = Counter(
+    'ollama_tokens_used_total',
+    'Total number of Ollama tokens used (estimated)',
+    ['model', 'type']
+)
+
 circuit_breaker_state = Gauge(
     'circuit_breaker_state',
     'Circuit breaker state (0=closed, 1=open, 2=half-open)',
@@ -84,6 +96,16 @@ class MetricsCollector:
         if usage:
             for token_type, count in usage.items():
                 openai_tokens_used.labels(
+                    model=model,
+                    type=token_type
+                ).inc(count)
+    
+    def record_ollama_request(self, model: str, status: str, usage: Dict[str, Any] = None):
+        ollama_requests_total.labels(model=model, status=status).inc()
+        
+        if usage:
+            for token_type, count in usage.items():
+                ollama_tokens_used.labels(
                     model=model,
                     type=token_type
                 ).inc(count)
