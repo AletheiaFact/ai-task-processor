@@ -4,6 +4,7 @@ services:
   ai-task-processor:
     build: .
     container_name: ai-task-processor
+    network_mode: host
     environment:
       - API_BASE_URL=${API_BASE_URL:-http://host.docker.internal:3000}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -26,10 +27,20 @@ services:
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-120}
       - OLLAMA_MAX_RETRIES=${OLLAMA_MAX_RETRIES:-3}
       - OLLAMA_MODEL_DOWNLOAD_TIMEOUT=${OLLAMA_MODEL_DOWNLOAD_TIMEOUT:-600}
+      # Rate Limiting configuration
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - RATE_LIMIT_STRATEGY=${RATE_LIMIT_STRATEGY:-rolling}
+      - RATE_LIMIT_STORAGE_PATH=${RATE_LIMIT_STORAGE_PATH:-/app/data/rate_limits.db}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-0}
+      - RATE_LIMIT_PER_HOUR=${RATE_LIMIT_PER_HOUR:-0}
+      - RATE_LIMIT_PER_DAY=${RATE_LIMIT_PER_DAY:-0}
+      - RATE_LIMIT_PER_WEEK=${RATE_LIMIT_PER_WEEK:-0}
+      - RATE_LIMIT_PER_MONTH=${RATE_LIMIT_PER_MONTH:-0}
     ports:
       - "8001:8001"
     volumes:
       - ./logs:/app/logs
+      - ./data:/app/data
     restart: unless-stopped
     depends_on:
       - ollama
@@ -83,6 +94,17 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
     restart: unless-stopped
+
+secrets:
+  oauth2_client_secret:
+    file: ./secrets/oauth2_client_secret.txt
+  openai_api_key:
+    file: ./secrets/openai_api_key.txt
+
+networks:
+  ai-network:
+    driver: bridge
+    name: ai-task-network
 
 volumes:
   prometheus_data:

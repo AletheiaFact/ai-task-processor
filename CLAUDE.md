@@ -78,6 +78,31 @@ Before running, configure these required environment variables in `.env`:
 **OpenAI (Optional):**
 - `OPENAI_API_KEY`: OpenAI API key (leave as placeholder to use mock processing)
 
+### Rate Limiting Examples
+**Example 1: Burst Protection with Daily Limits**
+```bash
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_MINUTE=20        # Allow bursts up to 20 tasks/minute
+RATE_LIMIT_PER_HOUR=100         # 100 tasks/hour steady rate
+RATE_LIMIT_PER_DAY=500          # 500 tasks/day quota
+```
+
+**Example 2: Budget Control (Weekly/Monthly)**
+```bash
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_WEEK=2000        # Max 2000 tasks per week
+RATE_LIMIT_PER_MONTH=7500       # Max 7500 tasks per month
+RATE_LIMIT_STRATEGY=rolling     # Rolling windows vs fixed calendar periods
+```
+
+**Example 3: Conservative Rate Limiting**
+```bash
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_MINUTE=5         # Slow and steady processing
+RATE_LIMIT_PER_DAY=200          # Conservative daily limit
+RATE_LIMIT_STRATEGY=fixed       # Calendar-based windows (00:00-23:59)
+```
+
 ### Monitoring Stack
 The Docker Compose setup includes comprehensive monitoring:
 - **Prometheus**: Metrics collection at `http://localhost:9090`
@@ -91,10 +116,11 @@ This is an **AI Task Processor** service that polls an external NestJS API for A
 ### Core Flow
 1. **OAuth2 Authentication** - Authenticates with Ory Cloud using client credentials flow
 2. **TaskScheduler** - Polls `/api/ai-tasks/pending` every 30 seconds with Bearer token
-3. **ProcessorFactory** - Routes tasks to appropriate processors based on task type
-4. **Processors** - Execute AI operations (text embeddings via OpenAI or mock data)
-5. **APIClient** - Updates task status via PATCH `/api/ai-tasks/:id` with results
-6. **MetricsServer** - Exposes Prometheus metrics at `:8001/metrics`
+3. **RateLimiter** - Checks multi-tier limits before processing (minute/hour/day/week/month)
+4. **ProcessorFactory** - Routes tasks to appropriate processors based on task type
+5. **Processors** - Execute AI operations (text embeddings via OpenAI, Ollama, or mock data)
+6. **APIClient** - Updates task status via PATCH `/api/ai-tasks/:id` with results
+7. **MetricsServer** - Exposes Prometheus metrics at `:8001/metrics`
 
 ### Key Architectural Patterns
 
@@ -118,6 +144,15 @@ This is an **AI Task Processor** service that polls an external NestJS API for A
 **Graceful Shutdown**: `shutdown_manager` coordinates clean shutdown across all components, ensuring in-flight tasks complete before termination.
 
 **Retry Logic**: Exponential backoff with jitter for both API calls and OpenAI requests, with different exception categorization (retryable vs non-retryable).
+
+**Multi-Tier Rate Limiting**: Hierarchical rate limiting system with persistent storage:
+- Supports minute, hour, day, week, and month limits simultaneously
+- Rolling and fixed window strategies available
+- SQLite-based persistence for long-term counters (survives restarts)
+- In-memory optimization for short-term limits (minute/hour)
+- Automatic database cleanup and counter management
+- Integrated with Prometheus metrics and health endpoints
+- Graceful handling when limits are exceeded (skip processing, continue service)
 
 ## Configuration System
 
@@ -149,6 +184,16 @@ All configuration via environment variables through Pydantic Settings in `config
 - `CIRCUIT_BREAKER_THRESHOLD`: Failures before circuit breaker opens (default: 5)
 - `METRICS_PORT`: Prometheus metrics server port (default: 8001)
 
+**Multi-Tier Rate Limiting:**
+- `RATE_LIMIT_ENABLED`: Enable/disable rate limiting (default: true)
+- `RATE_LIMIT_STRATEGY`: Window strategy - "rolling" or "fixed" (default: rolling)
+- `RATE_LIMIT_STORAGE_PATH`: Database path for persistent limits (default: /app/data/rate_limits.db)
+- `RATE_LIMIT_PER_MINUTE`: Tasks per minute limit (0 = disabled)
+- `RATE_LIMIT_PER_HOUR`: Tasks per hour limit (0 = disabled)
+- `RATE_LIMIT_PER_DAY`: Tasks per day limit (0 = disabled)
+- `RATE_LIMIT_PER_WEEK`: Tasks per week limit (0 = disabled)
+- `RATE_LIMIT_PER_MONTH`: Tasks per month limit (0 = disabled)
+
 ## Monitoring & Observability
 
 **Structured Logging**: All components use `structlog` with JSON output and correlation IDs for request tracing.
@@ -160,11 +205,12 @@ All configuration via environment variables through Pydantic Settings in `config
 - OpenAI usage tracking (tokens by model/type)
 - Ollama usage tracking (requests by model/status, estimated tokens)
 - Circuit breaker state monitoring
+- Multi-tier rate limiting metrics (current usage, limits, exceeded events by time period)
 
 **Health Endpoints**:
-- `/health` - Basic health check
+- `/health` - Basic health check with rate limiting status
 - `/ready` - Readiness probe
-- `/metrics` - Prometheus metrics
+- `/metrics` - Prometheus metrics including rate limiting data
 
 ## Extending the System
 

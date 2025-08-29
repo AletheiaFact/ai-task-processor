@@ -4,7 +4,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from .config import settings
-from .services import APIClient, metrics
+from .services import APIClient, metrics, rate_limiter
 from .processors import processor_factory
 from .models import Task, TaskResult, TaskStatus
 from .utils import get_logger, shutdown_manager
@@ -63,16 +63,45 @@ class TaskScheduler:
         
         try:
             async with APIClient() as api_client:
+                # Check rate limits before fetching tasks
+                rate_check = await rate_limiter.check_all_limits(settings.concurrency_limit)
+                
+                # Update rate limit metrics regardless of outcome
+                usage_stats = await rate_limiter.get_current_usage()
+                metrics.update_rate_limit_metrics(usage_stats)
+                
+                if not rate_check.allowed:
+                    logger.warning("Rate limit exceeded, skipping task processing",
+                                 period_exceeded=rate_check.period_exceeded,
+                                 current_usage=rate_check.current_usage,
+                                 limits=rate_check.limits)
+                    return
+                
                 tasks = await api_client.get_pending_tasks(limit=settings.concurrency_limit * 2)
                 
                 if not tasks:
                     logger.debug("No pending tasks found")
                     return
                 
-                logger.info("Found pending tasks", task_count=len(tasks))
+                # Double-check rate limit for actual batch size
+                actual_batch_size = min(len(tasks), settings.concurrency_limit)
+                rate_check = await rate_limiter.check_all_limits(actual_batch_size)
+                if not rate_check.allowed:
+                    logger.warning("Rate limit exceeded for actual batch, skipping task processing",
+                                 batch_size=actual_batch_size,
+                                 period_exceeded=rate_check.period_exceeded,
+                                 current_usage=rate_check.current_usage)
+                    return
+                
+                logger.info("Found pending tasks", 
+                           task_count=len(tasks),
+                           processing_batch=actual_batch_size,
+                           rate_limit_usage=rate_check.current_usage)
                 
                 processing_tasks = []
-                for task in tasks:
+                processed_task_ids = []
+                
+                for task in tasks[:actual_batch_size]:  # Limit to allowed batch size
                     if shutdown_manager.is_shutdown_requested():
                         break
                     
@@ -80,9 +109,19 @@ class TaskScheduler:
                     processing_task = asyncio.create_task(task_coroutine)
                     shutdown_manager.add_task(processing_task)
                     processing_tasks.append(processing_task)
+                    processed_task_ids.append(task.id)
                 
                 if processing_tasks:
-                    await asyncio.gather(*processing_tasks, return_exceptions=True)
+                    results = await asyncio.gather(*processing_tasks, return_exceptions=True)
+                    
+                    # Count successful completions for rate limiting
+                    successful_count = sum(1 for result in results if not isinstance(result, Exception))
+                    if successful_count > 0:
+                        await rate_limiter.record_completed_tasks(
+                            task_count=successful_count,
+                            task_type="ai_task",
+                            task_ids=processed_task_ids[:successful_count]
+                        )
                 
         except Exception as e:
             logger.error("Error in task polling cycle", error=str(e), exc_info=True)

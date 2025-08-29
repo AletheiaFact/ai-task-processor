@@ -6,7 +6,7 @@ import asyncio
 
 from .config import settings
 from .utils import get_logger, shutdown_manager
-from .services import metrics
+from .services import metrics, rate_limiter
 
 logger = get_logger(__name__)
 
@@ -15,7 +15,31 @@ app = FastAPI(title="AI Task Processor Metrics", version="1.0.0")
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "ai-task-processor"}
+    health_data = {
+        "status": "healthy", 
+        "service": "ai-task-processor",
+        "rate_limiting": {
+            "enabled": settings.rate_limit_enabled,
+            "strategy": settings.rate_limit_strategy.value if settings.rate_limit_enabled else None
+        }
+    }
+    
+    if settings.rate_limit_enabled:
+        try:
+            usage_stats = await rate_limiter.get_current_usage()
+            health_data["rate_limiting"]["current_usage"] = {
+                period: {
+                    "current": usage.current,
+                    "limit": usage.limit,
+                    "remaining": usage.remaining,
+                    "reset_at": usage.reset_at.isoformat()
+                }
+                for period, usage in usage_stats.items()
+            }
+        except Exception as e:
+            health_data["rate_limiting"]["error"] = str(e)
+    
+    return health_data
 
 
 @app.get("/metrics")

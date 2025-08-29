@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 from typing import Optional
 from enum import Enum
@@ -8,6 +8,11 @@ class ProcessingMode(str, Enum):
     OPENAI = "openai"
     OLLAMA = "ollama"
     HYBRID = "hybrid"  # Ollama first, OpenAI fallback
+
+
+class RateLimitStrategy(str, Enum):
+    ROLLING = "rolling"  # Last N seconds/minutes/hours
+    FIXED = "fixed"      # Calendar-based windows
 
 
 class Settings(BaseSettings):
@@ -47,6 +52,30 @@ class Settings(BaseSettings):
         return f"https://{self.ory_project_slug}.projects.oryapis.com"
     
     log_level: str = Field("INFO", env="LOG_LEVEL")
+    
+    # Rate Limiting Configuration
+    rate_limit_enabled: bool = Field(True, env="RATE_LIMIT_ENABLED")
+    rate_limit_strategy: RateLimitStrategy = Field(RateLimitStrategy.ROLLING, env="RATE_LIMIT_STRATEGY")
+    rate_limit_storage_path: str = Field("/app/data/rate_limits.db", env="RATE_LIMIT_STORAGE_PATH")
+    
+    # Time-based limits (0 = disabled)
+    rate_limit_per_minute: int = Field(0, env="RATE_LIMIT_PER_MINUTE")
+    rate_limit_per_hour: int = Field(0, env="RATE_LIMIT_PER_HOUR") 
+    rate_limit_per_day: int = Field(0, env="RATE_LIMIT_PER_DAY")
+    rate_limit_per_week: int = Field(0, env="RATE_LIMIT_PER_WEEK")
+    rate_limit_per_month: int = Field(0, env="RATE_LIMIT_PER_MONTH")
+    
+    @field_validator('rate_limit_storage_path')
+    @classmethod
+    def validate_storage_path(cls, v):
+        """Ensure storage directory exists for file paths"""
+        import os
+        if v != ":memory:" and not v.startswith(":"):
+            try:
+                os.makedirs(os.path.dirname(v), exist_ok=True)
+            except (OSError, ValueError):
+                pass  # Ignore permission errors for now
+        return v
     
     class Config:
         env_file = ".env"

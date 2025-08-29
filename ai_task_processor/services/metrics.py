@@ -61,6 +61,36 @@ circuit_breaker_state = Gauge(
     ['service']
 )
 
+# Rate limiting metrics
+rate_limit_current_usage = Gauge(
+    'rate_limit_current_usage',
+    'Current usage count for time period',
+    ['period']
+)
+
+rate_limit_max_allowed = Gauge(
+    'rate_limit_max_allowed', 
+    'Maximum allowed tasks for time period',
+    ['period']
+)
+
+rate_limit_exceeded_total = Counter(
+    'rate_limit_exceeded_total',
+    'Total number of rate limit exceeded events',
+    ['period']
+)
+
+rate_limit_check_duration_seconds = Histogram(
+    'rate_limit_check_duration_seconds',
+    'Time spent checking rate limits'
+)
+
+rate_limit_remaining = Gauge(
+    'rate_limit_remaining',
+    'Remaining tasks allowed in current window',
+    ['period']
+)
+
 
 class MetricsCollector:
     def __init__(self):
@@ -112,6 +142,21 @@ class MetricsCollector:
     
     def set_circuit_breaker_state(self, service: str, state: int):
         circuit_breaker_state.labels(service=service).set(state)
+    
+    def record_rate_limit_exceeded(self, period: str):
+        """Record when a rate limit is exceeded for a specific period"""
+        rate_limit_exceeded_total.labels(period=period).inc()
+    
+    def update_rate_limit_metrics(self, usage_stats: dict):
+        """Update all rate limiting metrics with current usage statistics"""
+        for period, usage in usage_stats.items():
+            rate_limit_current_usage.labels(period=period).set(usage.current)
+            rate_limit_max_allowed.labels(period=period).set(usage.limit)
+            rate_limit_remaining.labels(period=period).set(usage.remaining)
+    
+    def observe_rate_limit_check_duration(self, duration: float):
+        """Record time spent checking rate limits"""
+        rate_limit_check_duration_seconds.observe(duration)
 
 
 metrics = MetricsCollector()
