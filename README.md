@@ -1,33 +1,22 @@
-# Aletheia AI Task Manager
+# AI Task Processor
 
-A production-ready AI Task Processor service that integrates with NestJS applications to process AI tasks using OpenAI. Features OAuth2 authentication via Ory Cloud, comprehensive monitoring with Prometheus/Grafana, and robust error handling with circuit breakers and retry logic.
+A service that polls NestJS APIs for AI tasks and processes them using OpenAI, Ollama, or mock data. Handles authentication, rate limiting, monitoring, and error recovery.
 
-## Features
+## What it does
 
-- **OAuth2 Authentication**: Secure machine-to-machine authentication with Ory Cloud
-- **AI Processing**: Text embedding generation using OpenAI API with mock support for testing
-- **Robust Integration**: Circuit breaker pattern, exponential backoff, and graceful error handling  
-- **Comprehensive Monitoring**: Prometheus metrics, structured logging, and Grafana dashboards
-- **Production Ready**: Docker containerization, health checks, and graceful shutdown
-- **Flexible Processing**: Supports both real OpenAI API calls and mock processing for development
+- Polls your NestJS API every 30 seconds for pending AI tasks
+- Processes text embeddings using OpenAI, local Ollama models, or mock data
+- Updates task status back to your API with results
+- Includes OAuth2 authentication, multi-tier rate limiting, and monitoring
 
-## Architecture
+## Core capabilities
 
-The service follows a producer-consumer pattern with these components:
-
-1. **OAuth2 Service** - Handles Ory Cloud authentication with automatic token refresh
-2. **TaskScheduler** - Polls `/api/ai-tasks/pending` every 30 seconds with authenticated requests
-3. **ProcessorFactory** - Routes tasks to appropriate processors based on task type
-4. **Processors** - Execute AI operations (text embeddings via OpenAI or mock processing)
-5. **APIClient** - Updates task status via PATCH `/api/ai-tasks/:id` with results
-6. **MetricsServer** - Exposes comprehensive Prometheus metrics at `:8001/metrics`
-
-### Processing Flow
-```
-NestJS API ←→ OAuth2 Auth ←→ TaskScheduler ←→ ProcessorFactory ←→ AI Processor
-     ↑                                                                    ↓
-     └─────────────── Result Update ←──────────── Processed Result ←──────┘
-```
+- **Text embeddings**: Generate vector embeddings from text content
+- **Multiple AI providers**: OpenAI API, local Ollama models, or mock processing
+- **Rate limiting**: Per-minute/hour/day/week/month limits with persistent storage
+- **Authentication**: OAuth2 with Ory Cloud integration and auto token refresh  
+- **Monitoring**: Prometheus metrics, Grafana dashboards, health checks
+- **Resilience**: Circuit breakers, retry logic, graceful error handling
 
 ## Setup
 
