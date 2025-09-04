@@ -1,6 +1,6 @@
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
 from enum import Enum
 
 
@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     ollama_timeout: int = Field(120, env="OLLAMA_TIMEOUT")
     ollama_max_retries: int = Field(3, env="OLLAMA_MAX_RETRIES")
     ollama_model_download_timeout: int = Field(600, env="OLLAMA_MODEL_DOWNLOAD_TIMEOUT")
+    
+    # Supported models configuration
+    supported_models: List[str] = Field(["nomic-embed-text"], env="SUPPORTED_MODELS")
     
     # Ory Cloud OAuth2 Configuration
     ory_project_slug: str = Field(..., env="ORY_PROJECT_SLUG")

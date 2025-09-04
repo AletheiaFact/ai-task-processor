@@ -25,19 +25,12 @@ class EmbeddingProvider(ABC):
 class OpenAIEmbeddingProvider(EmbeddingProvider):
     """OpenAI embedding provider"""
     
-    SUPPORTED_MODELS = {
-        "text-embedding-3-small",
-        "text-embedding-3-large", 
-        "text-embedding-ada-002"
-    }
-    
     def supports_model(self, model: str) -> bool:
-        return model in self.SUPPORTED_MODELS
+        # OpenAI handles model validation on their end - be flexible
+        # Let the API reject invalid models instead of pre-filtering
+        return True
     
     async def create_embedding(self, text: str, model: str, correlation_id: str = None) -> Dict[str, Any]:
-        if not self.supports_model(model):
-            raise NonRetryableError(f"OpenAI provider does not support model: {model}")
-        
         # Check if using mock mode
         if settings.openai_api_key == "your_openai_api_key_here":
             logger.info(
@@ -68,19 +61,9 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
 class OllamaEmbeddingProvider(EmbeddingProvider):
     """Ollama embedding provider for local models"""
     
-    SUPPORTED_MODELS = {
-        "nomic-embed-text",
-        "all-minilm",
-        "mxbai-embed-large",
-        "snowflake-arctic-embed",
-        "bge-large",
-        "bge-base"
-    }
-    
     def supports_model(self, model: str) -> bool:
-        # Ollama is flexible with models, but we maintain a list of known good models
-        # Also support any model that the user might want to use
-        return model in self.SUPPORTED_MODELS or True  # Allow any model for flexibility
+        # Check against configuration-defined supported models
+        return model in settings.supported_models
     
     async def create_embedding(self, text: str, model: str, correlation_id: str = None) -> Dict[str, Any]:
         return await ollama_client.create_embedding(

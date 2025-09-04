@@ -167,4 +167,7 @@ tmp/
 # API Keys and secrets
 .env.local
 .env.production
-secrets/
+secrets/data/
+
+# Rate limiting database
+data/rate_limits.db

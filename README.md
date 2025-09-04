@@ -1,139 +1,268 @@
 # AI Task Processor
 
-A service that polls NestJS APIs for AI tasks and processes them using OpenAI, Ollama, or mock data. Handles authentication, rate limiting, monitoring, and error recovery.
+A service that polls NestJS APIs for AI tasks and processes them using OpenAI, local Ollama models, or mock data. Features configuration-based model management, OAuth2 authentication, rate limiting, and comprehensive monitoring.
 
 ## What it does
 
 - Polls your NestJS API every 30 seconds for pending AI tasks
-- Processes text embeddings using OpenAI, local Ollama models, or mock data
+- Processes text embeddings using OpenAI API, local Ollama models, or mock data
 - Updates task status back to your API with results
 - Includes OAuth2 authentication, multi-tier rate limiting, and monitoring
 
 ## Core capabilities
 
 - **Text embeddings**: Generate vector embeddings from text content
-- **Multiple AI providers**: OpenAI API, local Ollama models, or mock processing
+- **Multiple AI providers**: OpenAI API (cloud), Ollama (local), or mock processing
+- **Processing modes**: `openai`, `ollama`, or `hybrid` (Ollama with OpenAI fallback)
+- **Configuration-based models**: Define supported models in environment variables
 - **Rate limiting**: Per-minute/hour/day/week/month limits with persistent storage
 - **Authentication**: OAuth2 with Ory Cloud integration and auto token refresh  
-- **Monitoring**: Prometheus metrics, Grafana dashboards, health checks
+- **Monitoring**: Prometheus metrics, health checks, structured logging
 - **Resilience**: Circuit breakers, retry logic, graceful error handling
 
-## Setup
+## Processing Modes
 
-### Prerequisites
+### OpenAI Processing (`PROCESSING_MODE=openai`)
+- Uses OpenAI API for all embeddings
+- Supports any OpenAI embedding model requested in tasks
+- Requires valid `OPENAI_API_KEY`
+- No local model downloads needed
+- Flexible - automatically supports new OpenAI models
 
-- Python 3.11+
-- Docker & Docker Compose
-- Ory Cloud project with OAuth2 client configured
-- NestJS API with AI task endpoints
-- OpenAI API Key (optional - can use mock processing)
+### Ollama Processing (`PROCESSING_MODE=ollama`)
+- Uses local Ollama models for all embeddings
+- Only processes models defined in `SUPPORTED_MODELS` configuration
+- Downloads configured models automatically on startup
+- Completely local processing - no external API calls
+- Controlled - only uses pre-approved models
 
-### Running with Docker
+### Hybrid Processing (`PROCESSING_MODE=hybrid`)
+- Tries Ollama first, falls back to OpenAI if unavailable
+- Best of both worlds - local efficiency with cloud reliability
+- Requires both Ollama setup and valid `OPENAI_API_KEY`
 
-1. Configure environment:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API_BASE_URL and OPENAI_API_KEY
-   ```
+## Quick Start
 
-2. Start the service:
-   ```bash
-   docker-compose up -d ai-task-processor
-   ```
+### 1. Configure Environment
+```bash
+cp .env.example .env
+```
 
-3. View logs:
-   ```bash
-   docker-compose logs -f ai-task-processor
-   ```
+Edit `.env` with your configuration:
 
-### Local Development
+**Required for all modes:**
+```bash
+# API Integration
+API_BASE_URL=http://localhost:3000
 
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+# OAuth2 Authentication (Ory Cloud)
+ORY_PROJECT_SLUG=your-project-slug
+OAUTH2_CLIENT_ID=your-client-id
+OAUTH2_CLIENT_SECRET=your-client-secret
+```
 
-2. Set up environment:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+**For OpenAI/Hybrid modes:**
+```bash
+PROCESSING_MODE=openai  # or hybrid
+OPENAI_API_KEY=sk-your-real-openai-key
+```
 
-3. Run the application:
-   ```bash
-   python run.py
-   ```
+**For Ollama/Hybrid modes:**
+```bash
+PROCESSING_MODE=ollama  # or hybrid
+SUPPORTED_MODELS=["nomic-embed-text","all-minilm"]
+```
+
+### 2. Start the Service
+
+**All services (recommended):**
+```bash
+docker-compose up -d
+docker-compose logs -f ai-task-processor
+```
+
+**Step-by-step:**
+```bash
+# Start Ollama first (if using local processing)
+docker-compose up -d ollama
+
+# Start AI processor (downloads models automatically)
+docker-compose up -d ai-task-processor
+
+# Watch logs
+docker-compose logs -f ai-task-processor
+```
+
+### 3. What You'll See
+
+**Startup logs:**
+```
+AI Task Processor starting up
+Ensuring Ollama models are available (if using ollama/hybrid mode)
+Downloading missing supported model: nomic-embed-text
+Model downloaded successfully: nomic-embed-text
+All services started, running indefinitely
+```
+
+**Task processing logs:**
+```
+OAuth2 token generated successfully
+Found pending tasks: 1
+Processing text embedding task: model=nomic-embed-text
+Embedding created successfully: 768 dimensions
+Task processing completed: status=succeeded
+```
 
 ## Configuration
 
-Key environment variables:
+### Core Settings
+```bash
+# Processing Mode (required)
+PROCESSING_MODE=ollama  # openai, ollama, or hybrid
 
-### Required Configuration
-- `API_BASE_URL` - Base URL of the NestJS API (required)
-- `ORY_PROJECT_SLUG` - Your Ory Cloud project slug (required)
-- `OAUTH2_CLIENT_ID` - OAuth2 client ID from Ory Cloud (required)
-- `OAUTH2_CLIENT_SECRET` - OAuth2 client secret from Ory Cloud (required)
+# API Integration (required)
+API_BASE_URL=http://localhost:3000
 
-### Optional Configuration
-- `OPENAI_API_KEY` - OpenAI API key for AI operations (use "your_openai_api_key_here" for mock processing)
-- `OAUTH2_SCOPE` - OAuth2 scope for authentication (default: "read write")
-- `POLLING_INTERVAL_SECONDS` - How often to poll for new tasks (default: 30)
-- `CONCURRENCY_LIMIT` - Max simultaneous task processing (default: 5)
-- `REQUEST_TIMEOUT` - HTTP request timeout in seconds (default: 30)
-- `CIRCUIT_BREAKER_THRESHOLD` - Circuit breaker failure threshold (default: 5)
+# OAuth2 Authentication (required)
+ORY_PROJECT_SLUG=your-project-slug
+OAUTH2_CLIENT_ID=your-client-id
+OAUTH2_CLIENT_SECRET=your-client-secret
+```
+
+### OpenAI Configuration
+```bash
+# Required for openai/hybrid modes
+OPENAI_API_KEY=sk-your-real-openai-key
+
+# Optional
+OPENAI_TIMEOUT=60
+```
+
+### Ollama Configuration
+```bash
+# Required for ollama/hybrid modes
+SUPPORTED_MODELS=["nomic-embed-text","all-minilm"]
+
+# Optional
+OLLAMA_BASE_URL=http://ollama:11434
+OLLAMA_TIMEOUT=120
+OLLAMA_MODEL_DOWNLOAD_TIMEOUT=600
+```
+
+### Rate Limiting Configuration
+```bash
+# Multi-tier rate limiting
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_MINUTE=20
+RATE_LIMIT_PER_HOUR=100  
+RATE_LIMIT_PER_DAY=500
+RATE_LIMIT_PER_WEEK=2000
+RATE_LIMIT_PER_MONTH=7500
+RATE_LIMIT_STRATEGY=rolling  # or fixed
+```
+
+### Other Settings
+```bash
+# Polling and processing
+POLLING_INTERVAL_SECONDS=30
+CONCURRENCY_LIMIT=5
+MAX_RETRIES=3
+
+# Timeouts and circuit breaker
+REQUEST_TIMEOUT=30
+CIRCUIT_BREAKER_THRESHOLD=5
+
+# Monitoring
+METRICS_PORT=8001
+LOG_LEVEL=INFO
+```
 
 ## NestJS Integration
 
-The service integrates with NestJS applications using these authenticated endpoints:
+The service integrates with NestJS applications using these OAuth2-protected endpoints:
 
-- `GET /api/ai-tasks/pending` - Returns list of pending tasks (OAuth2 protected)
-- `PATCH /api/ai-tasks/:id` - Updates task status and results (OAuth2 protected)
+- `GET /api/ai-tasks/pending?limit=10` - Returns pending tasks
+- `PATCH /api/ai-tasks/:id` - Updates task status and results
 
-Expected task format from NestJS (MongoDB schema):
+### Expected Task Format
 ```json
 {
-  "_id": "task-id",
-  "type": "text_embedding",
+  "_id": "68b89107952364b0aad89c1d",
+  "type": "text_embedding", 
   "state": "pending",
-  "content": {"text": "Text to process", "model": "text-embedding-3-small"},
+  "content": {
+    "text": "Text to embed",
+    "model": "nomic-embed-text"
+  },
   "callbackRoute": "verification_update_embedding",
   "callbackParams": {"documentId": "doc-id"},
-  "createdAt": "2024-01-01T00:00:00.000Z",
-  "updatedAt": null
+  "createdAt": "2024-01-01T00:00:00.000Z"
 }
 ```
 
-### Authentication
-The service uses OAuth2 Client Credentials flow via Ory Cloud:
-1. Authenticates with your Ory Cloud project using client credentials
-2. Obtains access token for API requests
-3. Includes `Authorization: Bearer <token>` header in all API calls
-4. Automatically refreshes tokens when expired
+### Task Processing Flow
+1. **Polling**: Service polls `/api/ai-tasks/pending` every 30 seconds
+2. **Authentication**: Uses OAuth2 Bearer token from Ory Cloud
+3. **Model Validation**: Checks if requested model is supported by current provider
+4. **Processing**: Generates embeddings using OpenAI API or local Ollama
+5. **Callback**: Updates task via `PATCH /api/ai-tasks/:id` with results
+6. **Rate Limiting**: Respects configured rate limits across all time periods
+
+## Model Management
+
+### OpenAI Models (Cloud Processing)
+- **Flexible**: Supports any OpenAI embedding model
+- **Current models**: `text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002`
+- **Future-proof**: Automatically works with new OpenAI models
+- **No downloads**: Models hosted by OpenAI
+
+### Ollama Models (Local Processing)
+- **Controlled**: Only supports models defined in `SUPPORTED_MODELS`
+- **Auto-download**: Downloads configured models on startup
+- **Popular models**: `nomic-embed-text`, `all-minilm`, `mxbai-embed-large`
+- **Persistent**: Models stored in Docker volumes
+
+### Switching Processing Modes
+Change `PROCESSING_MODE` in `.env` and restart:
+
+```bash
+# Switch to OpenAI
+echo "PROCESSING_MODE=openai" >> .env
+docker-compose restart ai-task-processor
+
+# Switch to local Ollama
+echo "PROCESSING_MODE=ollama" >> .env  
+docker-compose restart ai-task-processor
+
+# Switch to hybrid (Ollama + OpenAI fallback)
+echo "PROCESSING_MODE=hybrid" >> .env
+docker-compose restart ai-task-processor
+```
 
 ## Monitoring
 
 ### Health Endpoints
-- `GET /health` - Basic health check
-- `GET /ready` - Readiness probe for Kubernetes
-- `GET /metrics` - Prometheus metrics endpoint
-
-### Full Monitoring Stack
-Optional monitoring via Docker Compose:
-```bash
-docker-compose up -d  # Starts processor + monitoring stack
-```
-
-Access monitoring tools:
-- **Prometheus**: `http://localhost:9090` - Metrics collection and querying
-- **Grafana**: `http://localhost:3001` - Dashboards and visualization (admin/admin)
+- `GET :8001/health` - Basic health check with rate limiting status
+- `GET :8001/ready` - Readiness probe for Kubernetes
+- `GET :8001/metrics` - Prometheus metrics endpoint
 
 ### Available Metrics
 - Task processing duration and counts by type/status
 - OAuth2 authentication success/failure rates
 - API request metrics with endpoint/method/status_code labels
 - OpenAI API usage tracking (tokens by model/type)
+- Ollama usage tracking (requests by model/status)
+- Rate limiting metrics (current usage, limits, exceeded events)
 - Circuit breaker state monitoring
-- System resource utilization
+
+### Development with Mock Processing
+For development without API costs, use placeholder OpenAI key:
+```bash
+PROCESSING_MODE=openai
+OPENAI_API_KEY=your_openai_api_key_here  # Enables mock processing
+```
+
+The system generates realistic mock embeddings and usage statistics for testing.
 
 ## Extending the System
 
@@ -143,25 +272,21 @@ Access monitoring tools:
 3. Implement processor class inheriting from `BaseProcessor`
 4. Register processor in `ProcessorFactory.__init__()`
 
-Example processor implementation:
-```python
-class NewTaskProcessor(BaseProcessor):
-    def can_process(self, task: Task) -> bool:
-        return task.type == TaskType.NEW_TASK_TYPE
-    
-    async def process(self, task: Task) -> TaskResult:
-        # Implementation here
-        pass
-```
+### Adding New AI Providers
+Follow the pattern in `embedding_providers.py`:
+1. Create provider class inheriting from `EmbeddingProvider`
+2. Implement `supports_model()` and `create_embedding()` methods
+3. Add provider to `EmbeddingProviderFactory.create_provider()`
 
-### Mock Processing
-For development without API costs, set `OPENAI_API_KEY=your_openai_api_key_here` to enable mock processing. The system will generate realistic mock embeddings and usage statistics for testing.
+## Production Deployment
 
-### Production Deployment
 This implementation includes production-ready features:
-- OAuth2 authentication with token refresh
-- Circuit breaker pattern for API resilience
+- OAuth2 authentication with automatic token refresh
+- Circuit breaker pattern for API resilience  
+- Multi-tier rate limiting with persistent storage
 - Comprehensive monitoring and health checks
-- Graceful shutdown handling
+- Graceful shutdown handling with signal management
 - Structured logging with correlation IDs
-- Docker containerization with proper resource limits
+- Docker containerization with health checks
+- Configuration-based model management
+- Support for both cloud and local AI processing

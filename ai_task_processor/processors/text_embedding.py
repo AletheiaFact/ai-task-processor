@@ -2,6 +2,7 @@ from typing import Dict, Any
 from ..models import Task, TaskResult, TaskStatus, TaskType, TextEmbeddingInput
 from ..services import embedding_provider
 from ..utils import get_logger, RetryableError
+from ..config import settings
 from .base_processor import BaseProcessor
 
 logger = get_logger(__name__)
@@ -18,13 +19,14 @@ class TextEmbeddingProcessor(BaseProcessor):
             
             # Handle different content formats - with new requirement, model should always be provided
             if isinstance(task.content, str):
-                # Legacy support: if content is a string, use default model
+                # Legacy support: if content is a string, use first supported model as default
+                default_model = settings.supported_models[0] if settings.supported_models else "nomic-embed-text"
                 input_data = TextEmbeddingInput(
                     text=task.content,
-                    model="text-embedding-3-small"  # Default fallback
+                    model=default_model
                 )
                 logger.warning(
-                    "Task content is string format, using default model",
+                    "Task content is string format, using default supported model",
                     task_id=task.id,
                     default_model=input_data.model
                 )
@@ -35,6 +37,13 @@ class TextEmbeddingProcessor(BaseProcessor):
                 input_data = TextEmbeddingInput(**task.content)
             else:
                 raise ValueError(f"Unsupported content type: {type(task.content)}")
+            
+            # Validate that the requested model is supported
+            if not embedding_provider.supports_model(input_data.model):
+                raise ValueError(
+                    f"Requested model '{input_data.model}' is not supported. "
+                    f"Supported models: {settings.supported_models}"
+                )
             
             logger.info(
                 "Processing text embedding task",

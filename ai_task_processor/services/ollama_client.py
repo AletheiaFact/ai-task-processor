@@ -23,6 +23,45 @@ class OllamaClient:
         if self._session and not self._session.closed:
             await self._session.close()
     
+    async def ensure_models_available(self, correlation_id: str = None):
+        """Ensure all supported models are downloaded and available"""
+        logger.info(
+            "Ensuring supported models are available",
+            supported_models=settings.supported_models,
+            correlation_id=correlation_id
+        )
+        
+        for model in settings.supported_models:
+            try:
+                if not await self._check_model_exists(model, correlation_id):
+                    logger.info(
+                        "Downloading missing supported model",
+                        model=model,
+                        correlation_id=correlation_id
+                    )
+                    await self._download_model(model, correlation_id)
+                else:
+                    logger.info(
+                        "Supported model already available",
+                        model=model,
+                        correlation_id=correlation_id
+                    )
+            except Exception as e:
+                logger.error(
+                    "Failed to ensure model availability",
+                    model=model,
+                    error=str(e),
+                    correlation_id=correlation_id
+                )
+                # Continue with other models even if one fails
+                continue
+        
+        logger.info(
+            "Finished ensuring model availability",
+            supported_models=settings.supported_models,
+            correlation_id=correlation_id
+        )
+    
     async def _check_model_exists(self, model: str, correlation_id: str = None) -> bool:
         """Check if model exists locally, if not trigger download"""
         try:
@@ -44,6 +83,16 @@ class OllamaClient:
     
     async def _download_model(self, model: str, correlation_id: str = None):
         """Download model if it doesn't exist"""
+        # Check if model is in supported models list
+        if model not in settings.supported_models:
+            logger.error(
+                "Model not in supported models list",
+                model=model,
+                supported_models=settings.supported_models,
+                correlation_id=correlation_id
+            )
+            raise NonRetryableError(f"Model '{model}' is not in the supported models list: {settings.supported_models}")
+        
         try:
             logger.info(
                 "Downloading Ollama model",

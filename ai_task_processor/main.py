@@ -3,6 +3,8 @@ import sys
 from .utils import setup_logging, get_logger, shutdown_manager
 from .scheduler import task_scheduler
 from .server import metrics_server
+from .config import settings, ProcessingMode
+from .services.ollama_client import ollama_client
 
 logger = get_logger(__name__)
 
@@ -11,6 +13,18 @@ async def main():
     try:
         setup_logging()
         logger.info("AI Task Processor starting up")
+        
+        # Initialize Ollama models if using Ollama processing mode
+        if settings.processing_mode in [ProcessingMode.OLLAMA, ProcessingMode.HYBRID]:
+            logger.info("Ensuring Ollama models are available", processing_mode=settings.processing_mode)
+            try:
+                await ollama_client.ensure_models_available(correlation_id="startup")
+                logger.info("Ollama model initialization completed")
+            except Exception as e:
+                logger.error("Failed to initialize Ollama models", error=str(e))
+                if settings.processing_mode == ProcessingMode.OLLAMA:
+                    logger.error("Cannot proceed without Ollama models in OLLAMA mode")
+                    sys.exit(1)
         
         shutdown_manager.setup_signal_handlers()
         
