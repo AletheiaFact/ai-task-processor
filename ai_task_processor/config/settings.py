@@ -1,6 +1,6 @@
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
-from typing import Optional, List
+from typing import Optional, List, Dict
 from enum import Enum
 import os
 
@@ -38,8 +38,12 @@ class Settings(BaseSettings):
     ollama_max_retries: int = Field(3, env="OLLAMA_MAX_RETRIES")
     ollama_model_download_timeout: int = Field(600, env="OLLAMA_MODEL_DOWNLOAD_TIMEOUT")
     
-    # Supported models configuration
-    supported_models: List[str] = Field(["nomic-embed-text", "dengcao/Qwen3-Embedding-0.6B:Q8_0"], env="SUPPORTED_MODELS")
+    # Supported models configuration - defines what gets installed/supported for Ollama
+    supported_models: List[str] = Field(
+        default=["nomic-embed-text", "dengcao/Qwen3-Embedding-0.6B:Q8_0"],
+        env="SUPPORTED_MODELS",
+        description="List of Ollama models to install and support (config-driven)"
+    )
     
     # Ory Cloud OAuth2 Configuration
     ory_project_slug: str = Field(..., env="ORY_PROJECT_SLUG")

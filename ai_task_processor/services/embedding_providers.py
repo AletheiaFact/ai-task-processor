@@ -23,11 +23,11 @@ class EmbeddingProvider(ABC):
 
 
 class OpenAIEmbeddingProvider(EmbeddingProvider):
-    """OpenAI embedding provider"""
+    """OpenAI embedding provider - flexible with any model from task metadata"""
     
     def supports_model(self, model: str) -> bool:
-        # OpenAI handles model validation on their end - be flexible
-        # Let the API reject invalid models instead of pre-filtering
+        # OpenAI is flexible - accept any model and let OpenAI API validate
+        # This allows using new models without code changes
         return True
     
     async def create_embedding(self, text: str, model: str, correlation_id: str = None) -> Dict[str, Any]:
@@ -59,10 +59,11 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
 
 
 class OllamaEmbeddingProvider(EmbeddingProvider):
-    """Ollama embedding provider for local models"""
+    """Ollama embedding provider - only supports models defined in configuration"""
     
     def supports_model(self, model: str) -> bool:
-        # Check against configuration-defined supported models
+        # Only support models explicitly configured in SUPPORTED_MODELS
+        # These are the models that will be installed/available locally
         return model in settings.supported_models
     
     async def create_embedding(self, text: str, model: str, correlation_id: str = None) -> Dict[str, Any]:
