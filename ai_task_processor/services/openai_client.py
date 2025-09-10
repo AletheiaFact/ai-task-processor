@@ -44,7 +44,8 @@ class OpenAIClient:
             
             response = await self.client.embeddings.create(
                 model=model,
-                input=text
+                input=text,
+                dimensions=1024
             )
             
             embedding = response.data[0].embedding

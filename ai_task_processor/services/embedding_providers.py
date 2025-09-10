@@ -38,9 +38,9 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                 model=model,
                 correlation_id=correlation_id
             )
-            # Generate mock embedding vector
+            # Generate mock embedding vector with 1024 dimensions
             import random
-            dimensions = 1536 if "3-small" in model else 3072 if "3-large" in model else 1536
+            dimensions = 1024
             mock_embedding = [random.uniform(-1, 1) for _ in range(dimensions)]
             return {
                 "embedding": mock_embedding,
