@@ -53,8 +53,7 @@ docker-compose up -d ollama
 
 # Download embedding models
 docker-compose exec ollama ollama pull nomic-embed-text
-docker-compose exec ollama ollama pull all-minilm
-docker-compose exec ollama ollama pull mxbai-embed-large
+docker-compose exec ollama ollama pull dengcao/Qwen3-Embedding-0.6B:Q8_0
 
 # Set processing mode to use Ollama
 echo "PROCESSING_MODE=ollama" >> .env

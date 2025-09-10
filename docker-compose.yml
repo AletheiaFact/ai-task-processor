@@ -26,7 +26,7 @@ services:
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-120}
       - OLLAMA_MAX_RETRIES=${OLLAMA_MAX_RETRIES:-3}
       - OLLAMA_MODEL_DOWNLOAD_TIMEOUT=${OLLAMA_MODEL_DOWNLOAD_TIMEOUT:-600}
-      - SUPPORTED_MODELS=${SUPPORTED_MODELS:-["nomic-embed-text"]}
+      - SUPPORTED_MODELS=${SUPPORTED_MODELS:-["nomic-embed-text","dengcao/Qwen3-Embedding-0.6B:Q8_0"]}
       # Rate Limiting configuration
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
       - RATE_LIMIT_STRATEGY=${RATE_LIMIT_STRATEGY:-rolling}
