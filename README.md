@@ -1,48 +1,20 @@
 # AI Task Processor
 
-A service that polls NestJS APIs for AI tasks and processes them using OpenAI, local Ollama models, or mock data. Features configuration-based model management, OAuth2 authentication, rate limiting, and comprehensive monitoring.
+A service that polls NestJS APIs for AI tasks and processes them using OpenAI, local Ollama models. Features OAuth2 authentication, multi-tier rate limiting, and comprehensive monitoring.
 
-<img width="1862" height="3942" alt="image" src="https://github.com/user-attachments/assets/95b103be-f038-44c0-ae91-87b14139f21c" />
+## Features
 
-
-## What it does
-
-- Polls your NestJS API every 30 seconds for pending AI tasks
-- Processes text embeddings using OpenAI API, local Ollama models, or mock data
-- Updates task status back to your API with results
-- Includes OAuth2 authentication, multi-tier rate limiting, and monitoring
-
-## Core capabilities
-
-- **Text embeddings**: Generate vector embeddings from text content
-- **Multiple AI providers**: OpenAI API (cloud), Ollama (local), or mock processing
-- **Processing modes**: `openai`, `ollama`, or `hybrid` (Ollama with OpenAI fallback)
-- **Configuration-based models**: Define supported models in environment variables
-- **Rate limiting**: Per-minute/hour/day/week/month limits with persistent storage
-- **Authentication**: OAuth2 with Ory Cloud integration and auto token refresh  
-- **Monitoring**: Prometheus metrics, health checks, structured logging
-- **Resilience**: Circuit breakers, retry logic, graceful error handling
+- **Text embeddings** generation using OpenAI API, Ollama (local)
+- **Processing modes**: `openai`, `ollama`, or `hybrid` (Ollama first, OpenAI fallback)
+- **OAuth2 authentication** via Ory Cloud with automatic token refresh
+- **Multi-tier rate limiting** with persistent storage (minute/hour/day/week/month)
+- **Resilience**: Circuit breakers, retry logic, graceful shutdown
 
 ## Processing Modes
 
-### OpenAI Processing (`PROCESSING_MODE=openai`)
-- Uses OpenAI API for all embeddings
-- Supports any OpenAI embedding model requested in tasks
-- Requires valid `OPENAI_API_KEY`
-- No local model downloads needed
-- Flexible - automatically supports new OpenAI models
-
-### Ollama Processing (`PROCESSING_MODE=ollama`)
-- Uses local Ollama models for all embeddings
-- Only processes models defined in `SUPPORTED_MODELS` configuration
-- Downloads configured models automatically on startup
-- Completely local processing - no external API calls
-- Controlled - only uses pre-approved models
-
-### Hybrid Processing (`PROCESSING_MODE=hybrid`)
-- Tries Ollama first, falls back to OpenAI if unavailable
-- Best of both worlds - local efficiency with cloud reliability
-- Requires both Ollama setup and valid `OPENAI_API_KEY`
+- **`openai`**: Uses OpenAI API for all embeddings. Requires valid `OPENAI_API_KEY`. Supports any OpenAI model.
+- **`ollama`**: Uses local Ollama models. Only processes models in `SUPPORTED_MODELS`. Downloads models on startup.
+- **`hybrid`**: Tries Ollama first, falls back to OpenAI. Requires both Ollama and `OPENAI_API_KEY`.
 
 ## Quick Start
 
@@ -51,78 +23,9 @@ A service that polls NestJS APIs for AI tasks and processes them using OpenAI, l
 cp .env.example .env
 ```
 
-Edit `.env` with your configuration:
+Edit `.env` with required settings:
 
-**Required for all modes:**
 ```bash
-# API Integration
-API_BASE_URL=http://localhost:3000
-
-# OAuth2 Authentication (Ory Cloud)
-ORY_PROJECT_SLUG=your-project-slug
-OAUTH2_CLIENT_ID=your-client-id
-OAUTH2_CLIENT_SECRET=your-client-secret
-```
-
-**For OpenAI/Hybrid modes:**
-```bash
-PROCESSING_MODE=openai  # or hybrid
-OPENAI_API_KEY=sk-your-real-openai-key
-```
-
-**For Ollama/Hybrid modes:**
-```bash
-PROCESSING_MODE=ollama  # or hybrid
-SUPPORTED_MODELS=["nomic-embed-text","all-minilm"]
-```
-
-### 2. Start the Service
-
-**All services (recommended):**
-```bash
-docker-compose up -d
-docker-compose logs -f ai-task-processor
-```
-
-**Step-by-step:**
-```bash
-# Start Ollama first (if using local processing)
-docker-compose up -d ollama
-
-# Start AI processor (downloads models automatically)
-docker-compose up -d ai-task-processor
-
-# Watch logs
-docker-compose logs -f ai-task-processor
-```
-
-### 3. What You'll See
-
-**Startup logs:**
-```
-AI Task Processor starting up
-Ensuring Ollama models are available (if using ollama/hybrid mode)
-Downloading missing supported model: nomic-embed-text
-Model downloaded successfully: nomic-embed-text
-All services started, running indefinitely
-```
-
-**Task processing logs:**
-```
-OAuth2 token generated successfully
-Found pending tasks: 1
-Processing text embedding task: model=nomic-embed-text
-Embedding created successfully: 768 dimensions
-Task processing completed: status=succeeded
-```
-
-## Configuration
-
-### Core Settings
-```bash
-# Processing Mode (required)
-PROCESSING_MODE=ollama  # openai, ollama, or hybrid
-
 # API Integration (required)
 API_BASE_URL=http://localhost:3000
 
@@ -130,166 +33,124 @@ API_BASE_URL=http://localhost:3000
 ORY_PROJECT_SLUG=your-project-slug
 OAUTH2_CLIENT_ID=your-client-id
 OAUTH2_CLIENT_SECRET=your-client-secret
+
+# Processing Mode
+PROCESSING_MODE=openai  # or ollama, hybrid
+OPENAI_API_KEY=sk-your-key  # Required for openai/hybrid modes
+SUPPORTED_MODELS=["nomic-embed-text","dengcao/Qwen3-Embedding-0.6B:Q8_0"]  # For ollama/hybrid
 ```
 
-### OpenAI Configuration
+### 2. Start Services
+
 ```bash
-# Required for openai/hybrid modes
-OPENAI_API_KEY=sk-your-real-openai-key
-
-# Optional
-OPENAI_TIMEOUT=60
+docker-compose up -d
+docker-compose logs -f ai-task-processor
 ```
 
-### Ollama Configuration
-```bash
-# Required for ollama/hybrid modes
-SUPPORTED_MODELS=["nomic-embed-text","all-minilm"]
+Ollama models download automatically on first startup when using `ollama` or `hybrid` mode.
 
-# Optional
-OLLAMA_BASE_URL=http://ollama:11434
-OLLAMA_TIMEOUT=120
-OLLAMA_MODEL_DOWNLOAD_TIMEOUT=600
-```
+## Configuration
 
-### Rate Limiting Configuration
-```bash
-# Multi-tier rate limiting
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_PER_MINUTE=20
-RATE_LIMIT_PER_HOUR=100  
-RATE_LIMIT_PER_DAY=500
-RATE_LIMIT_PER_WEEK=2000
-RATE_LIMIT_PER_MONTH=7500
-RATE_LIMIT_STRATEGY=rolling  # or fixed
-```
+All configuration via environment variables (see `.env.example` for complete list).
 
-### Other Settings
-```bash
-# Polling and processing
-POLLING_INTERVAL_SECONDS=30
-CONCURRENCY_LIMIT=5
-MAX_RETRIES=3
+### Key Settings
 
-# Timeouts and circuit breaker
-REQUEST_TIMEOUT=30
-CIRCUIT_BREAKER_THRESHOLD=5
+**Processing:**
+- `PROCESSING_MODE`: `openai`, `ollama`, or `hybrid` (default: `openai`)
+- `OPENAI_API_KEY`: OpenAI API key (required for `openai`/`hybrid`)
+- `SUPPORTED_MODELS`: JSON array of Ollama models (default: `["nomic-embed-text","dengcao/Qwen3-Embedding-0.6B:Q8_0"]`)
 
-# Monitoring
-METRICS_PORT=8001
-LOG_LEVEL=INFO
-```
+**Rate Limiting:**
+- `RATE_LIMIT_ENABLED`: Enable rate limiting (default: `true`)
+- `RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_PER_HOUR`, `RATE_LIMIT_PER_DAY`, `RATE_LIMIT_PER_WEEK`, `RATE_LIMIT_PER_MONTH`: Set to `0` to disable individual limits
+- `RATE_LIMIT_STRATEGY`: `rolling` or `fixed` (default: `rolling`)
 
-## NestJS Integration
+**Advanced:**
+- `POLLING_INTERVAL_SECONDS`: Task polling frequency (default: `30`)
+- `CONCURRENCY_LIMIT`: Max parallel tasks (default: `5`)
+- `CIRCUIT_BREAKER_THRESHOLD`: Failures before circuit opens (default: `5`)
 
-The service integrates with NestJS applications using these OAuth2-protected endpoints:
+## API Integration
 
-- `GET /api/ai-tasks/pending?limit=10` - Returns pending tasks
-- `PATCH /api/ai-tasks/:id` - Updates task status and results
+Integrates with NestJS APIs via OAuth2-protected endpoints:
 
-### Expected Task Format
+- `GET /api/ai-tasks/pending?limit=10` - Fetch pending tasks
+- `PATCH /api/ai-tasks/:id` - Update task status/results
+
+### Task Format
 ```json
 {
-  "_id": "68b89107952364b0aad89c1d",
-  "type": "text_embedding", 
+  "_id": "task-id",
+  "type": "text_embedding",
   "state": "pending",
-  "content": {
-    "text": "Text to embed",
-    "model": "nomic-embed-text"
-  },
+  "content": {"text": "Text to embed", "model": "nomic-embed-text"},
   "callbackRoute": "verification_update_embedding",
-  "callbackParams": {"documentId": "doc-id"},
+  "callbackParams": {"targetId": "doc-id", "field": "embedding"},
   "createdAt": "2024-01-01T00:00:00.000Z"
 }
 ```
 
-### Task Processing Flow
-1. **Polling**: Service polls `/api/ai-tasks/pending` every 30 seconds
-2. **Authentication**: Uses OAuth2 Bearer token from Ory Cloud
-3. **Model Validation**: Checks if requested model is supported by current provider
-4. **Processing**: Generates embeddings using OpenAI API or local Ollama
-5. **Callback**: Updates task via `PATCH /api/ai-tasks/:id` with results
-6. **Rate Limiting**: Respects configured rate limits across all time periods
+### Processing Flow
+1. Poll `/api/ai-tasks/pending` every 30 seconds with OAuth2 Bearer token
+2. Validate model is supported by current processing mode
+3. Generate embeddings via OpenAI or Ollama
+4. Update task via `PATCH /api/ai-tasks/:id`
+5. Respect rate limits
 
 ## Model Management
 
-### OpenAI Models (Cloud Processing)
-- **Flexible**: Supports any OpenAI embedding model
-- **Current models**: `text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002`
-- **Future-proof**: Automatically works with new OpenAI models
-- **No downloads**: Models hosted by OpenAI
+**OpenAI (cloud):**
+- Supports any OpenAI embedding model (e.g., `text-embedding-3-small`, `text-embedding-ada-002`)
+- Models hosted by OpenAI, no downloads needed
 
-### Ollama Models (Local Processing)
-- **Controlled**: Only supports models defined in `SUPPORTED_MODELS`
-- **Auto-download**: Downloads configured models on startup
-- **Popular models**: `nomic-embed-text`, `all-minilm`, `mxbai-embed-large`
-- **Persistent**: Models stored in Docker volumes
+**Ollama (local):**
+- Only processes models in `SUPPORTED_MODELS` configuration
+- Auto-downloads on startup (e.g., `nomic-embed-text`, `dengcao/Qwen3-Embedding-0.6B:Q8_0`)
+- Models persist in Docker volumes
 
-### Switching Processing Modes
-Change `PROCESSING_MODE` in `.env` and restart:
-
-```bash
-# Switch to OpenAI
-echo "PROCESSING_MODE=openai" >> .env
-docker-compose restart ai-task-processor
-
-# Switch to local Ollama
-echo "PROCESSING_MODE=ollama" >> .env  
-docker-compose restart ai-task-processor
-
-# Switch to hybrid (Ollama + OpenAI fallback)
-echo "PROCESSING_MODE=hybrid" >> .env
-docker-compose restart ai-task-processor
-```
+**Switch modes:** Edit `PROCESSING_MODE` in `.env` and run `docker-compose restart ai-task-processor`
 
 ## Monitoring
 
-### Health Endpoints
-- `GET :8001/health` - Basic health check with rate limiting status
-- `GET :8001/ready` - Readiness probe for Kubernetes
-- `GET :8001/metrics` - Prometheus metrics endpoint
+**Health Endpoints:**
+- `:8001/health` - Health check with rate limit status
+- `:8001/ready` - Readiness probe
+- `:8001/metrics` - Prometheus metrics
 
-### Available Metrics
-- Task processing duration and counts by type/status
-- OAuth2 authentication success/failure rates
-- API request metrics with endpoint/method/status_code labels
-- OpenAI API usage tracking (tokens by model/type)
-- Ollama usage tracking (requests by model/status)
-- Rate limiting metrics (current usage, limits, exceeded events)
-- Circuit breaker state monitoring
+**Available Metrics:**
+- Task processing (duration, counts by type/status)
+- OAuth2 authentication (success/failure rates)
+- API requests (by endpoint/method/status)
+- OpenAI/Ollama usage (tokens, requests by model)
+- Rate limiting (usage, limits, exceeded events)
+- Circuit breaker state
 
-### Development with Mock Processing
-For development without API costs, use placeholder OpenAI key:
-```bash
-PROCESSING_MODE=openai
-OPENAI_API_KEY=your_openai_api_key_here  # Enables mock processing
-```
-
-The system generates realistic mock embeddings and usage statistics for testing.
+**Mock Processing:** Use `OPENAI_API_KEY=your_openai_api_key_here` (placeholder) to enable mock embeddings for testing without API costs.
 
 ## Extending the System
 
-### Adding New Task Types
-1. Add enum value to `TaskType` in `ai_task_processor/models/task.py`
-2. Create input/output models if needed  
-3. Implement processor class inheriting from `BaseProcessor`
-4. Register processor in `ProcessorFactory.__init__()`
+**New Task Types:**
+1. Add enum to `TaskType` in `ai_task_processor/models/task.py`
+2. Create input/output models
+3. Implement processor inheriting from `BaseProcessor`
+4. Register in `ProcessorFactory.__init__()`
 
-### Adding New AI Providers
-Follow the pattern in `embedding_providers.py`:
-1. Create provider class inheriting from `EmbeddingProvider`
-2. Implement `supports_model()` and `create_embedding()` methods
-3. Add provider to `EmbeddingProviderFactory.create_provider()`
+**New AI Providers:**
+1. Create provider class inheriting from `EmbeddingProvider` (see `embedding_providers.py`)
+2. Implement `supports_model()` and `create_embedding()`
+3. Register in `EmbeddingProviderFactory.create_provider()`
 
-## Production Deployment
+## Architecture
 
-This implementation includes production-ready features:
-- OAuth2 authentication with automatic token refresh
-- Circuit breaker pattern for API resilience  
-- Multi-tier rate limiting with persistent storage
-- Comprehensive monitoring and health checks
-- Graceful shutdown handling with signal management
-- Structured logging with correlation IDs
-- Docker containerization with health checks
-- Configuration-based model management
-- Support for both cloud and local AI processing
+- **OAuth2 authentication** with automatic token refresh
+- **Circuit breaker** for API resilience
+- **Multi-tier rate limiting** with SQLite persistence
+- **Graceful shutdown** with signal management
+- **Structured logging** with correlation IDs
+- **Docker containerization** with health checks
+
+---
+
+## Architecture Diagram
+
+<img width="1862" height="3942" alt="image" src="https://github.com/user-attachments/assets/95b103be-f038-44c0-ae91-87b14139f21c" />
