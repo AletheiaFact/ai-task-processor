@@ -2,6 +2,9 @@
 
 A service that polls NestJS APIs for AI tasks and processes them using OpenAI, local Ollama models, or mock data. Features configuration-based model management, OAuth2 authentication, rate limiting, and comprehensive monitoring.
 
+<img width="1862" height="3942" alt="image" src="https://github.com/user-attachments/assets/95b103be-f038-44c0-ae91-87b14139f21c" />
+
+
 ## What it does
 
 - Polls your NestJS API every 30 seconds for pending AI tasks
