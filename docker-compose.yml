@@ -4,6 +4,8 @@ services:
   ai-task-processor:
     build: .
     container_name: ai-task-processor
+    entrypoint: >
+      sh -c "mkdir -p /app/data && chmod 777 /app/data && python run.py"
     environment:
       - API_BASE_URL=${API_BASE_URL:-http://host.docker.internal:3000}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
