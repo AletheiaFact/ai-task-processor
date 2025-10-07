@@ -45,58 +45,78 @@ class OryAuthService:
     async def _generate_client_credentials_token(self) -> str:
         """Generate access token using client credentials flow"""
         import base64
-        
+
         # Use Basic Authentication (client_secret_basic) instead of client_secret_post
         credentials = f"{self.client_id}:{self.client_secret}"
         encoded_credentials = base64.b64encode(credentials.encode()).decode()
-        
+
         form_data = {
             "grant_type": "client_credentials",
             "scope": self.scope,
         }
-        
+
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
             "Authorization": f"Basic {encoded_credentials}"
         }
-        
+
+        token_url = f"{self.hydra_public_url}/oauth2/token"
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 start_time = time.time()
                 response = await client.post(
-                    f"{self.hydra_public_url}/oauth2/token",
+                    token_url,
                     headers=headers,
                     data=form_data
                 )
-                
+
                 duration = time.time() - start_time
                 metrics.record_api_request("/oauth2/token", "POST", response.status_code, duration)
-                
+
                 if response.status_code != 200:
                     logger.error(
                         "Failed to generate OAuth2 token",
                         status_code=response.status_code,
-                        response=response.text
+                        response=response.text,
+                        token_url=token_url,
+                        ory_project_slug=settings.ory_project_slug,
+                        client_id=self.client_id[:8] + "...",
+                        suggestion="Check ORY_PROJECT_SLUG, OAUTH2_CLIENT_ID, and OAUTH2_CLIENT_SECRET in .env"
                     )
                     raise Exception(f"OAuth2 token generation failed: {response.status_code}")
-                
+
                 token_data = response.json()
-                
+
                 # Cache the token
                 self._access_token = token_data["access_token"]
                 expires_in = token_data.get("expires_in", 3600)  # Default 1 hour
                 self._token_expires_at = datetime.now() + timedelta(seconds=expires_in)
-                
+
                 logger.info(
                     "Successfully generated OAuth2 token",
                     expires_in=expires_in,
                     token_type=token_data.get("token_type", "bearer")
                 )
-                
+
                 return self._access_token
-                
+
+        except httpx.ConnectError as e:
+            logger.error(
+                "Failed to connect to Ory Cloud OAuth2 endpoint",
+                token_url=token_url,
+                ory_project_slug=settings.ory_project_slug,
+                error_type="connection_error",
+                error_details=str(e),
+                suggestion="Check ORY_PROJECT_SLUG in .env and verify internet connectivity"
+            )
+            raise Exception(f"Cannot connect to Ory Cloud: {str(e)}")
         except httpx.TimeoutException:
-            logger.error("Timeout while generating OAuth2 token")
+            logger.error(
+                "Timeout while connecting to Ory Cloud OAuth2 endpoint",
+                token_url=token_url,
+                suggestion="Check internet connectivity or increase timeout"
+            )
             raise Exception("OAuth2 token generation timeout")
         except Exception as e:
             logger.error("Error generating OAuth2 token", error=str(e))

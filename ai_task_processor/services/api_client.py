@@ -84,19 +84,40 @@ class APIClient:
     async def _make_request(self, method: str, endpoint: str, **kwargs) -> httpx.Response:
         if not self._client:
             raise RuntimeError("APIClient not initialized. Use as async context manager.")
-        
+
         url = f"{self.base_url}{endpoint}"
         start_time = time.time()
-        
+
         # Add OAuth2 authorization headers
         auth_headers = await self._get_auth_headers()
         headers = kwargs.get("headers", {})
         headers.update(auth_headers)
         kwargs["headers"] = headers
-        
+
         async def request():
-            response = await self._client.request(method, url, **kwargs)
-            
+            try:
+                response = await self._client.request(method, url, **kwargs)
+            except httpx.ConnectError as e:
+                logger.error(
+                    "Failed to connect to API",
+                    url=url,
+                    base_url=self.base_url,
+                    endpoint=endpoint,
+                    error_type="connection_error",
+                    error_details=str(e),
+                    suggestion="Check API_BASE_URL in .env and ensure API is running"
+                )
+                raise RetryableError(f"Connection failed to {url}: {str(e)}")
+            except httpx.TimeoutException as e:
+                logger.error(
+                    "Request timeout to API",
+                    url=url,
+                    timeout=self.timeout,
+                    error_type="timeout_error",
+                    suggestion="Check if API is responding slowly or increase REQUEST_TIMEOUT"
+                )
+                raise RetryableError(f"Request timeout to {url}")
+
             if response.status_code >= 500:
                 raise RetryableError(f"Server error: {response.status_code}")
             elif response.status_code == 401:
@@ -106,9 +127,9 @@ class APIClient:
                 raise RetryableError("Authentication failed, token may be expired")
             elif response.status_code >= 400:
                 raise NonRetryableError(f"Client error: {response.status_code}")
-            
+
             return response
-        
+
         try:
             response = await self.circuit_breaker.call(request)
             duration = time.time() - start_time

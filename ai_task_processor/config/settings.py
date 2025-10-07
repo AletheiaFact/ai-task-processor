@@ -18,7 +18,7 @@ class RateLimitStrategy(str, Enum):
 
 class Settings(BaseSettings):
     api_base_url: str = Field(..., env="API_BASE_URL")
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
+    openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
     polling_interval_seconds: int = Field(30, env="POLLING_INTERVAL_SECONDS")
     concurrency_limit: int = Field(5, env="CONCURRENCY_LIMIT")
     max_retries: int = Field(3, env="MAX_RETRIES")
@@ -84,7 +84,14 @@ class Settings(BaseSettings):
             except (OSError, ValueError):
                 pass  # Ignore permission errors for now
         return v
-    
+
+    def validate_openai_key_required(self) -> bool:
+        """Check if OpenAI API key is required based on processing mode"""
+        if self.processing_mode in [ProcessingMode.OPENAI, ProcessingMode.HYBRID]:
+            if not self.openai_api_key or self.openai_api_key == "your_openai_api_key_here":
+                return False
+        return True
+
     class Config:
         env_file = ".env"
 

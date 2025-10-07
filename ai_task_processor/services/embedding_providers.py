@@ -31,8 +31,8 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         return True
     
     async def create_embedding(self, text: str, model: str, correlation_id: str = None) -> Dict[str, Any]:
-        # Check if using mock mode
-        if settings.openai_api_key == "your_openai_api_key_here":
+        # Check if API key is not configured or is placeholder
+        if not settings.openai_api_key or settings.openai_api_key == "your_openai_api_key_here":
             logger.info(
                 "Using mock OpenAI embedding data (no API key provided)",
                 model=model,
@@ -50,7 +50,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                     "total_tokens": len(text.split())
                 }
             }
-        
+
         return await openai_client.create_embedding(
             text=text,
             model=model,

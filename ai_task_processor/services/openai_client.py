@@ -9,8 +9,11 @@ logger = get_logger(__name__)
 
 class OpenAIClient:
     def __init__(self):
+        # Initialize with API key if available, otherwise use placeholder
+        # This allows the client to be imported even when not in use
+        api_key = settings.openai_api_key or "sk-placeholder"
         self.client = openai.AsyncOpenAI(
-            api_key=settings.openai_api_key,
+            api_key=api_key,
             timeout=settings.openai_timeout
         )
     

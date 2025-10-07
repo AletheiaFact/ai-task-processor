@@ -12,9 +12,9 @@ A service that polls NestJS APIs for AI tasks and processes them using OpenAI, l
 
 ## Processing Modes
 
-- **`openai`**: Uses OpenAI API for all embeddings. Requires valid `OPENAI_API_KEY`. Supports any OpenAI model.
-- **`ollama`**: Uses local Ollama models. Only processes models in `SUPPORTED_MODELS`. Downloads models on startup.
-- **`hybrid`**: Tries Ollama first, falls back to OpenAI. Requires both Ollama and `OPENAI_API_KEY`.
+- **`openai`**: Uses OpenAI API for all embeddings. **Requires** `OPENAI_API_KEY`. Supports any OpenAI model.
+- **`ollama`**: Uses local Ollama models exclusively. `OPENAI_API_KEY` **not required**. Only processes models in `SUPPORTED_MODELS`. Downloads models on startup.
+- **`hybrid`**: Tries Ollama first, falls back to OpenAI. **Requires** both Ollama and `OPENAI_API_KEY`.
 
 ## Quick Start
 
@@ -36,8 +36,12 @@ OAUTH2_CLIENT_SECRET=your-client-secret
 
 # Processing Mode
 PROCESSING_MODE=openai  # or ollama, hybrid
-OPENAI_API_KEY=sk-your-key  # Required for openai/hybrid modes
-SUPPORTED_MODELS=["nomic-embed-text","dengcao/Qwen3-Embedding-0.6B:Q8_0"]  # For ollama/hybrid
+
+# OpenAI API Key (required for openai/hybrid, optional for ollama)
+OPENAI_API_KEY=sk-your-key
+
+# Ollama Models (for ollama/hybrid modes)
+SUPPORTED_MODELS=["nomic-embed-text","dengcao/Qwen3-Embedding-0.6B:Q8_0"]
 ```
 
 ### 2. Start Services
@@ -57,8 +61,8 @@ All configuration via environment variables (see `.env.example` for complete lis
 
 **Processing:**
 - `PROCESSING_MODE`: `openai`, `ollama`, or `hybrid` (default: `openai`)
-- `OPENAI_API_KEY`: OpenAI API key (required for `openai`/`hybrid`)
-- `SUPPORTED_MODELS`: JSON array of Ollama models (default: `["nomic-embed-text","dengcao/Qwen3-Embedding-0.6B:Q8_0"]`)
+- `OPENAI_API_KEY`: OpenAI API key (**required** for `openai`/`hybrid`, **optional** for `ollama`)
+- `SUPPORTED_MODELS`: JSON array of Ollama models for `ollama`/`hybrid` modes (default: `["nomic-embed-text","dengcao/Qwen3-Embedding-0.6B:Q8_0"]`)
 
 **Rate Limiting:**
 - `RATE_LIMIT_ENABLED`: Enable rate limiting (default: `true`)
