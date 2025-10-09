@@ -1,6 +1,6 @@
 # AI Task Processor
 
-A service that polls NestJS APIs for AI tasks and processes them using OpenAI, local Ollama models. Features OAuth2 authentication, multi-tier rate limiting, and comprehensive monitoring.
+A service that polls NestJS APIs for AI tasks and processes them using OpenAI, local Ollama models. Features OAuth2 authentication, multi-tier rate limiting.
 
 ## Features
 
@@ -114,20 +114,6 @@ Integrates with NestJS APIs via OAuth2-protected endpoints:
 
 **Switch modes:** Edit `PROCESSING_MODE` in `.env` and run `docker-compose restart ai-task-processor`
 
-## Monitoring
-
-**Health Endpoints:**
-- `:8001/health` - Health check with rate limit status
-- `:8001/ready` - Readiness probe
-- `:8001/metrics` - Prometheus metrics
-
-**Available Metrics:**
-- Task processing (duration, counts by type/status)
-- OAuth2 authentication (success/failure rates)
-- API requests (by endpoint/method/status)
-- OpenAI/Ollama usage (tokens, requests by model)
-- Rate limiting (usage, limits, exceeded events)
-- Circuit breaker state
 
 **Mock Processing:** Use `OPENAI_API_KEY=your_openai_api_key_here` (placeholder) to enable mock embeddings for testing without API costs.
 
