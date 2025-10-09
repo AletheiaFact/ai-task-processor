@@ -13,10 +13,18 @@ class TaskStatus(str, Enum):
 
 class TaskType(str, Enum):
     TEXT_EMBEDDING = "text_embedding"
+    IDENTIFYING_DATA = "identifying_data"
+    DEFINING_TOPICS = "defining_topics"
+    DEFINING_IMPACT_AREA = "defining_impact_area"
+    DEFINING_SEVERITY = "defining_severity"
 
 
 class CallbackRoute(str, Enum):
     VERIFICATION_UPDATE_EMBEDDING = "verification_update_embedding"
+    VERIFICATION_UPDATE_IDENTIFYING_DATA = "verification_update_identifying_data"
+    VERIFICATION_UPDATE_DEFINING_TOPICS = "verification_update_defining_topics"
+    VERIFICATION_UPDATE_DEFINING_IMPACT_AREA = "verification_update_defining_impact_area"
+    VERIFICATION_UPDATE_DEFINING_SEVERITY = "verification_update_defining_severity"
 
 
 class Task(BaseModel):
@@ -43,6 +51,10 @@ class TaskResult(BaseModel):
 class TextEmbeddingInput(BaseModel):
     text: str
     model: str = "text-embedding-3-small"
+
+class IdentifyingDataInput(BaseModel):
+    text: str
+    model: str = "o3-mini"
 
 
 class TextEmbeddingOutput(BaseModel):
