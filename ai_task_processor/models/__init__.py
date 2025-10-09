@@ -1,4 +1,4 @@
-from .task import Task, TaskResult, TaskStatus, TaskType, TextEmbeddingInput, TextEmbeddingOutput
+from .task import Task, TaskResult, TaskStatus, TaskType, TextEmbeddingInput, TextEmbeddingOutput, IdentifyingDataInput, IdentifyingDataOutput
 
 __all__ = [
     "Task",
@@ -6,5 +6,7 @@ __all__ = [
     "TaskStatus",
     "TaskType",
     "TextEmbeddingInput",
-    "TextEmbeddingOutput"
+    "IdentifyingDataInput",
+    "TextEmbeddingOutput",
+    "IdentifyingDataOutput"
 ]

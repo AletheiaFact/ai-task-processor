@@ -114,6 +114,109 @@ class OpenAIClient:
             )
             metrics.record_openai_request(model, "unknown_error")
             raise NonRetryableError(f"Unexpected error: {e}")
+    
+    @retry(
+        retryable_exceptions=(
+            openai.RateLimitError,
+            openai.APITimeoutError,
+            openai.InternalServerError,
+            openai.APIConnectionError
+        ),
+        non_retryable_exceptions=(
+            openai.AuthenticationError,
+            openai.PermissionDeniedError,
+            openai.BadRequestError,
+            NonRetryableError
+        )
+    )
+    async def create_completion(
+        self, 
+        prompt: str, 
+        model: str = "gpt-3.5-turbo",
+        correlation_id: str = None
+    ) -> Dict[str, Any]:
+        try:
+            logger.info(
+                "Creating completion",
+                model=model,
+                prompt_length=len(prompt),
+                correlation_id=correlation_id
+            )
+            
+            response = await self.client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=1
+            )
+            
+            content = response.choices[0].message.content
+            usage = {
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens
+            }
+            
+            metrics.record_openai_request(model, "success", usage)
+            
+            logger.info(
+                "Completion created successfully",
+                model=model,
+                usage=usage,
+                correlation_id=correlation_id
+            )
+            
+            return {
+                "choices": [{"text": content}],
+                "model": model,
+                "usage": usage
+            }
+            
+        except openai.RateLimitError as e:
+            logger.warning(
+                "OpenAI rate limit exceeded",
+                error=str(e),
+                correlation_id=correlation_id
+            )
+            metrics.record_openai_request(model, "rate_limited")
+            raise RetryableError(f"Rate limit exceeded: {e}")
+            
+        except (openai.APITimeoutError, openai.InternalServerError, openai.APIConnectionError) as e:
+            logger.warning(
+                "OpenAI temporary error",
+                error=str(e),
+                correlation_id=correlation_id
+            )
+            metrics.record_openai_request(model, "error")
+            raise RetryableError(f"Temporary OpenAI error: {e}")
+            
+        except (openai.AuthenticationError, openai.PermissionDeniedError) as e:
+            logger.error(
+                "OpenAI authentication error",
+                error=str(e),
+                correlation_id=correlation_id
+            )
+            metrics.record_openai_request(model, "auth_error")
+            raise NonRetryableError(f"Authentication error: {e}")
+            
+        except openai.BadRequestError as e:
+            logger.error(
+                "OpenAI bad request",
+                error=str(e),
+                correlation_id=correlation_id
+            )
+            metrics.record_openai_request(model, "bad_request")
+            raise NonRetryableError(f"Bad request: {e}")
+            
+        except Exception as e:
+            logger.error(
+                "Unexpected OpenAI error",
+                error=str(e),
+                correlation_id=correlation_id
+            )
+            metrics.record_openai_request(model, "unknown_error")
+            raise NonRetryableError(f"Unexpected error: {e}")
 
 
 openai_client = OpenAIClient()

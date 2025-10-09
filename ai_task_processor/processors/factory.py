@@ -21,15 +21,6 @@ class ProcessorFactory:
         )
     
     def get_processor(self, task: Task) -> Optional[BaseProcessor]:
-        logger.info(
-            "Getting processor for task type",
-            task_id=task.id,
-            task_type=task.type,
-            available_processors=list(self._processors.keys())
-        )
-
-        print(f"Getting processor for task type: {task.type}")
-        print(f"Available processors: {list(self._processors.keys())}")
         processor = self._processors.get(task.type)
         
         if processor is None:

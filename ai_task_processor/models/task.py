@@ -61,3 +61,8 @@ class TextEmbeddingOutput(BaseModel):
     embedding: List[float]
     model: str
     usage: Dict[str, int]
+
+class IdentifyingDataOutput(BaseModel):
+    personalities: List[str]
+    model: str
+    usage: Dict[str, int]

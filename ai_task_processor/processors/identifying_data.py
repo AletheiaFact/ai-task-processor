@@ -69,18 +69,14 @@ class IdentifyingDataProcessor(BaseProcessor):
             )
             
             # Use the identifying data provider to create identifying data
-            # result = await identifying_data.create_identifying_data(
-            #     text=input_data.text,
-            #     model=input_data.model,
-            #     correlation_id=task.id
-            # )
-
-            logger.warning(
-                "Identifying data processing success processors triggered",
-                task_id=task.id,
-                error="Identifying data processing success processors triggered"
+            result = await identifying_data.create_identifying_data(
+                text=input_data.text,
+                model=input_data.model,
+                correlation_id=task.id
             )
-            
+            print(f"result: {result}")
+            # TODO: identify the personality on wikidata
+
             return TaskResult(
                 task_id=task.id,
                 status=TaskStatus.SUCCEEDED,
