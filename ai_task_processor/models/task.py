@@ -56,6 +56,18 @@ class IdentifyingDataInput(BaseModel):
     text: str
     model: str = "o3-mini"
 
+class DefiningTopicsInput(BaseModel):
+    text: str
+    model: str = "o3-mini"
+
+class DefiningImpactAreaInput(BaseModel):
+    text: str
+    model: str = "o3-mini"
+
+class DefiningSeverityInput(BaseModel):
+    text: str
+    model: str = "o3-mini"
+
 
 class TextEmbeddingOutput(BaseModel):
     embedding: List[float]
@@ -80,5 +92,42 @@ class Personality(BaseModel):
 
 class IdentifyingDataOutput(BaseModel):
     personalities: List[Personality]
+    model: str
+    usage: Dict[str, int]
+
+class Topic(BaseModel):
+    """Topic with Wikidata enrichment"""
+    name: str  # Topic name
+    confidence: float  # Confidence score (0-1)
+    context: str  # Context of the topic
+    wikidata: Optional[WikidataEntity] = None  # Enriched Wikidata info
+
+class DefiningTopicsOutput(BaseModel):
+    topics: List[Topic]
+    model: str
+    usage: Dict[str, int]
+
+class ImpactArea(BaseModel):
+    """Impact area with Wikidata enrichment"""
+    name: str  # Impact area name
+    description: str  # Description of the impact
+    confidence: float  # Confidence score (0-1)
+    wikidata: Optional[WikidataEntity] = None  # Enriched Wikidata info
+
+class DefiningImpactAreaOutput(BaseModel):
+    impact_areas: List[ImpactArea]
+    model: str
+    usage: Dict[str, int]
+
+class Severity(BaseModel):
+    """Severity assessment with Wikidata enrichment"""
+    level: str  # Severity level (e.g., "low", "medium", "high", "critical")
+    score: float  # Numerical severity score (0-10)
+    reasoning: str  # Explanation of the severity assessment
+    factors: List[str]  # Key factors contributing to severity
+    wikidata: Optional[WikidataEntity] = None  # Enriched Wikidata info for severity classification
+
+class DefiningSeverityOutput(BaseModel):
+    severity: Severity
     model: str
     usage: Dict[str, int]

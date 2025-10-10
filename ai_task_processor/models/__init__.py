@@ -1,4 +1,4 @@
-from .task import Task, TaskResult, TaskStatus, TaskType, TextEmbeddingInput, TextEmbeddingOutput, IdentifyingDataInput, IdentifyingDataOutput
+from .task import Task, TaskResult, TaskStatus, TaskType, TextEmbeddingInput, TextEmbeddingOutput, IdentifyingDataInput, IdentifyingDataOutput, DefiningTopicsInput, DefiningTopicsOutput, DefiningImpactAreaInput, DefiningImpactAreaOutput, DefiningSeverityInput, DefiningSeverityOutput
 
 __all__ = [
     "Task",
@@ -7,6 +7,12 @@ __all__ = [
     "TaskType",
     "TextEmbeddingInput",
     "IdentifyingDataInput",
+    "DefiningTopicsInput",
+    "DefiningImpactAreaInput",
+    "DefiningSeverityInput",
     "TextEmbeddingOutput",
-    "IdentifyingDataOutput"
+    "IdentifyingDataOutput",
+    "DefiningTopicsOutput",
+    "DefiningImpactAreaOutput",
+    "DefiningSeverityOutput"
 ]

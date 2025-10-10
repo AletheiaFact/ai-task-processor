@@ -4,6 +4,9 @@ from ..utils import get_logger
 from .base_processor import BaseProcessor
 from .text_embedding import TextEmbeddingProcessor
 from .identifying_data import IdentifyingDataProcessor
+from .defining_topics import DefiningTopicsProcessor
+from .defining_impact_area import DefiningImpactAreaProcessor
+from .defining_severity import DefiningSeverityProcessor
 
 logger = get_logger(__name__)
 
@@ -12,7 +15,10 @@ class ProcessorFactory:
     def __init__(self):
         self._processors: Dict[str, BaseProcessor] = {
             TaskType.TEXT_EMBEDDING: TextEmbeddingProcessor(),
-            TaskType.IDENTIFYING_DATA: IdentifyingDataProcessor()
+            TaskType.IDENTIFYING_DATA: IdentifyingDataProcessor(),
+            TaskType.DEFINING_TOPICS: DefiningTopicsProcessor(),
+            TaskType.DEFINING_IMPACT_AREA: DefiningImpactAreaProcessor(),
+            TaskType.DEFINING_SEVERITY: DefiningSeverityProcessor()
         }
         
         logger.info(
