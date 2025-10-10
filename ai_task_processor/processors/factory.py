@@ -3,6 +3,10 @@ from ..models import Task, TaskType
 from ..utils import get_logger
 from .base_processor import BaseProcessor
 from .text_embedding import TextEmbeddingProcessor
+from .identifying_data import IdentifyingDataProcessor
+from .defining_topics import DefiningTopicsProcessor
+from .defining_impact_area import DefiningImpactAreaProcessor
+from .defining_severity import DefiningSeverityProcessor
 
 logger = get_logger(__name__)
 
@@ -10,7 +14,11 @@ logger = get_logger(__name__)
 class ProcessorFactory:
     def __init__(self):
         self._processors: Dict[str, BaseProcessor] = {
-            TaskType.TEXT_EMBEDDING: TextEmbeddingProcessor()
+            TaskType.TEXT_EMBEDDING: TextEmbeddingProcessor(),
+            TaskType.IDENTIFYING_DATA: IdentifyingDataProcessor(),
+            TaskType.DEFINING_TOPICS: DefiningTopicsProcessor(),
+            TaskType.DEFINING_IMPACT_AREA: DefiningImpactAreaProcessor(),
+            TaskType.DEFINING_SEVERITY: DefiningSeverityProcessor()
         }
         
         logger.info(
@@ -25,11 +33,21 @@ class ProcessorFactory:
             logger.warning(
                 "No processor found for task type",
                 task_id=task.id,
-                task_type=task.type
+                task_type=task.type,
+                available_processors=list(self._processors.keys())
             )
             return None
         
-        if not processor.can_process(task):
+        can_process_result = processor.can_process(task)
+        logger.info(
+            "Processor can_process check",
+            task_id=task.id,
+            task_type=task.type,
+            processor=processor.__class__.__name__,
+            can_process=can_process_result
+        )
+        
+        if not can_process_result:
             logger.warning(
                 "Processor cannot handle task",
                 task_id=task.id,
@@ -38,6 +56,12 @@ class ProcessorFactory:
             )
             return None
         
+        logger.info(
+            "Processor selected successfully",
+            task_id=task.id,
+            task_type=task.type,
+            processor=processor.__class__.__name__
+        )
         return processor
     
     def register_processor(self, task_type: str, processor: BaseProcessor):
