@@ -1,6 +1,7 @@
 from typing import Dict, Any
 from ..models import Task, TaskResult, TaskStatus, TaskType, IdentifyingDataInput
 from ..services import identifying_data
+from ..services.wikidata_client import wikidata_client
 from ..utils import get_logger, RetryableError
 from ..config import settings
 from .base_processor import BaseProcessor
@@ -74,8 +75,50 @@ class IdentifyingDataProcessor(BaseProcessor):
                 model=input_data.model,
                 correlation_id=task.id
             )
-            print(f"result: {result}")
-            # TODO: identify the personality on wikidata
+
+            logger.info(
+                "Identified personalities from AI model",
+                task_id=task.id,
+                personalities_count=len(result.get("personalities", [])),
+                correlation_id=task.id
+            )
+
+            # Enrich personalities with Wikidata information
+            personalities = result.get("personalities", [])
+            if personalities:
+                logger.info(
+                    "Enriching personalities with Wikidata",
+                    task_id=task.id,
+                    personalities_count=len(personalities),
+                    correlation_id=task.id
+                )
+
+                try:
+                    enriched_personalities = await wikidata_client.batch_enrich_personalities(
+                        personalities=personalities,
+                        language="en",  # TODO: Make language configurable
+                        correlation_id=task.id
+                    )
+                    result["personalities"] = enriched_personalities
+
+                    # Log enrichment statistics
+                    enriched_count = sum(1 for p in enriched_personalities if p.get("wikidata"))
+                    logger.info(
+                        "Wikidata enrichment completed",
+                        task_id=task.id,
+                        total_personalities=len(enriched_personalities),
+                        enriched_count=enriched_count,
+                        correlation_id=task.id
+                    )
+
+                except Exception as e:
+                    # Don't fail the entire task if Wikidata enrichment fails
+                    logger.warning(
+                        "Wikidata enrichment failed, continuing with unenriched data",
+                        task_id=task.id,
+                        error=str(e),
+                        correlation_id=task.id
+                    )
 
             return TaskResult(
                 task_id=task.id,

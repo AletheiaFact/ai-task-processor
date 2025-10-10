@@ -62,7 +62,23 @@ class TextEmbeddingOutput(BaseModel):
     model: str
     usage: Dict[str, int]
 
+class WikidataEntity(BaseModel):
+    """Wikidata entity information"""
+    id: str  # Wikidata entity ID (e.g., Q1234)
+    url: str  # Full Wikidata URL
+    label: str  # Primary label
+    description: Optional[str] = None  # Entity description
+    aliases: Optional[List[str]] = None  # Alternative names
+
+class Personality(BaseModel):
+    """Identified personality with Wikidata enrichment"""
+    name: str  # Full name of the person
+    mentioned_as: str  # How they appear in the text
+    confidence: float  # Confidence score (0-1)
+    context: str  # Context of mention
+    wikidata: Optional[WikidataEntity] = None  # Enriched Wikidata info
+
 class IdentifyingDataOutput(BaseModel):
-    personalities: List[str]
+    personalities: List[Personality]
     model: str
     usage: Dict[str, int]
