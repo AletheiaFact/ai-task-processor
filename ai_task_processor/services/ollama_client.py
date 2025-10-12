@@ -279,5 +279,146 @@ class OllamaClient:
             metrics.record_ollama_request(model, "unknown_error")
             raise NonRetryableError(f"Unexpected Ollama error: {e}")
 
+    @retry(
+        retryable_exceptions=(
+            aiohttp.ClientTimeout,
+            aiohttp.ClientConnectionError,
+            aiohttp.ServerTimeoutError,
+            RetryableError
+        ),
+        non_retryable_exceptions=(
+            aiohttp.ClientResponseError,
+            NonRetryableError
+        )
+    )
+    async def generate(
+        self,
+        prompt: str,
+        model: str = "llama2",
+        correlation_id: str = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Generate text completion using Ollama"""
+        try:
+            logger.info(
+                "Creating Ollama generation",
+                model=model,
+                prompt_length=len(prompt),
+                correlation_id=correlation_id
+            )
+
+            # Check if model exists, download if needed
+            if not await self._check_model_exists(model, correlation_id):
+                await self._download_model(model, correlation_id)
+
+            session = await self._get_session()
+
+            payload = {
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                **kwargs
+            }
+
+            async with session.post(
+                f"{self.base_url}/api/generate",
+                json=payload
+            ) as response:
+
+                if response.status == 200:
+                    data = await response.json()
+                    content = data.get("response", "")
+
+                    if not content:
+                        raise NonRetryableError("Empty response received from Ollama")
+
+                    # Ollama doesn't provide detailed token usage, estimate it
+                    estimated_prompt_tokens = len(prompt.split())
+                    estimated_completion_tokens = len(content.split())
+                    usage = {
+                        "prompt_tokens": estimated_prompt_tokens,
+                        "completion_tokens": estimated_completion_tokens,
+                        "total_tokens": estimated_prompt_tokens + estimated_completion_tokens
+                    }
+
+                    metrics.record_ollama_request(model, "success", usage)
+
+                    logger.info(
+                        "Ollama generation created successfully",
+                        model=model,
+                        content_length=len(content),
+                        estimated_tokens=usage["total_tokens"],
+                        correlation_id=correlation_id
+                    )
+
+                    return {
+                        "content": content,
+                        "model": model,
+                        "usage": usage
+                    }
+
+                elif response.status == 404:
+                    error_text = await response.text()
+                    logger.error(
+                        "Ollama model not found",
+                        model=model,
+                        error=error_text,
+                        correlation_id=correlation_id
+                    )
+                    metrics.record_ollama_request(model, "model_not_found")
+                    raise NonRetryableError(f"Model {model} not found: {error_text}")
+
+                elif response.status >= 500:
+                    error_text = await response.text()
+                    logger.warning(
+                        "Ollama server error",
+                        status=response.status,
+                        error=error_text,
+                        correlation_id=correlation_id
+                    )
+                    metrics.record_ollama_request(model, "server_error")
+                    raise RetryableError(f"Ollama server error {response.status}: {error_text}")
+
+                else:
+                    error_text = await response.text()
+                    logger.error(
+                        "Ollama client error",
+                        status=response.status,
+                        error=error_text,
+                        correlation_id=correlation_id
+                    )
+                    metrics.record_ollama_request(model, "client_error")
+                    raise NonRetryableError(f"Ollama client error {response.status}: {error_text}")
+
+        except aiohttp.ClientTimeout as e:
+            logger.warning(
+                "Ollama request timeout",
+                model=model,
+                error=str(e),
+                correlation_id=correlation_id
+            )
+            metrics.record_ollama_request(model, "timeout")
+            raise RetryableError(f"Ollama timeout: {e}")
+
+        except aiohttp.ClientConnectionError as e:
+            logger.warning(
+                "Ollama connection error",
+                model=model,
+                error=str(e),
+                correlation_id=correlation_id
+            )
+            metrics.record_ollama_request(model, "connection_error")
+            raise RetryableError(f"Ollama connection error: {e}")
+
+        except Exception as e:
+            logger.error(
+                "Unexpected Ollama error",
+                model=model,
+                error=str(e),
+                correlation_id=correlation_id
+            )
+            metrics.record_ollama_request(model, "unknown_error")
+            raise NonRetryableError(f"Unexpected Ollama error: {e}")
+
 
 ollama_client = OllamaClient()
