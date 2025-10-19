@@ -4,6 +4,8 @@ services:
   ai-task-processor:
     build: .
     container_name: ai-task-processor
+    entrypoint: >
+      sh -c "mkdir -p /app/data && chmod 777 /app/data && python run.py"
     environment:
       - API_BASE_URL=${API_BASE_URL:-http://host.docker.internal:3000}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -42,6 +44,8 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
     restart: unless-stopped
+    depends_on:
+      - ollama
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
@@ -49,7 +53,27 @@ services:
       retries: 3
       start_period: 10s
 
+  # Ollama service for local LLM processing
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+
 networks:
   ai-network:
     driver: bridge
     name: ai-task-network
+
+volumes:
+  ollama_models:
