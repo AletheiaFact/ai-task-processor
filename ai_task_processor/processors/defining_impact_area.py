@@ -10,6 +10,65 @@ logger = get_logger(__name__)
 
 
 class DefiningImpactAreaProcessor(BaseProcessor):
+    async def _enrich_impact_area_with_wikidata(
+        self,
+        impact_area: dict,
+        task_id: str,
+        correlation_id: str = None
+    ) -> dict:
+        """Enrich impact area with Wikidata information"""
+        name = impact_area.get("name", "")
+        description = impact_area.get("description", "")
+        wikidata_id = None
+
+        if name:
+            logger.info(
+                "Enriching impact area with Wikidata",
+                task_id=task_id,
+                impact_area_name=name,
+                correlation_id=correlation_id
+            )
+
+            try:
+                wikidata_info = await wikidata_client.enrich_topic(
+                    topic=name,
+                    language="pt",
+                    correlation_id=correlation_id
+                )
+
+                if wikidata_info:
+                    wikidata_id = wikidata_info.get("id", "")
+                    logger.info(
+                        "Wikidata enrichment completed",
+                        task_id=task_id,
+                        impact_area_name=name,
+                        wikidata_id=wikidata_id,
+                        correlation_id=correlation_id
+                    )
+                else:
+                    logger.warning(
+                        "No Wikidata information found",
+                        task_id=task_id,
+                        impact_area_name=name,
+                        correlation_id=correlation_id
+                    )
+
+            except Exception as e:
+                logger.warning(
+                    "Wikidata enrichment failed, continuing without Wikidata ID",
+                    task_id=task_id,
+                    impact_area_name=name,
+                    error=str(e),
+                    correlation_id=correlation_id
+                )
+
+        return {
+            "name": name,
+            "description": description,
+            "wikidataId": wikidata_id,
+            "language": "pt"
+        }
+
     def can_process(self, task: Task) -> bool:
         result = task.type == TaskType.DEFINING_IMPACT_AREA
         logger.info(
@@ -82,63 +141,17 @@ class DefiningImpactAreaProcessor(BaseProcessor):
             )
 
             impact_area = result.get("impact_area", {})
-            name = impact_area.get("name", "")
-            description = impact_area.get("description", "")
-            wikidata_id = None
-
-            if name:
-                logger.info(
-                    "Enriching impact area with Wikidata",
-                    task_id=task.id,
-                    impact_area_name=name,
-                    correlation_id=task.id
-                )
-
-                try:
-                    wikidata_info = await wikidata_client.enrich_topic(
-                        topic=name,
-                        language="pt",
-                        correlation_id=task.id
-                    )
-
-                    if wikidata_info:
-                        wikidata_id = wikidata_info.get("id", "")
-                        logger.info(
-                            "Wikidata enrichment completed",
-                            task_id=task.id,
-                            impact_area_name=name,
-                            wikidata_id=wikidata_id,
-                            correlation_id=task.id
-                        )
-                    else:
-                        logger.warning(
-                            "No Wikidata information found",
-                            task_id=task.id,
-                            impact_area_name=name,
-                            correlation_id=task.id
-                        )
-
-                except Exception as e:
-                    logger.warning(
-                        "Wikidata enrichment failed, continuing without Wikidata ID",
-                        task_id=task.id,
-                        impact_area_name=name,
-                        error=str(e),
-                        correlation_id=task.id
-                    )
-
-            final_result = {
-                "name": name,
-                "description": description,
-                "wikidataId": wikidata_id,
-                "language": "pt"
-            }
+            final_result = await self._enrich_impact_area_with_wikidata(
+                impact_area=impact_area,
+                task_id=task.id,
+                correlation_id=task.id
+            )
 
             logger.info(
                 "Impact area processing completed successfully",
                 task_id=task.id,
-                name=name,
-                has_wikidata_id=bool(wikidata_id),
+                name=final_result.get("name"),
+                has_wikidata_id=bool(final_result.get("wikidataId")),
                 correlation_id=task.id
             )
 

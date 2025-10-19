@@ -10,6 +10,70 @@ logger = get_logger(__name__)
 
 
 class DefiningTopicsProcessor(BaseProcessor):
+    async def _enrich_topics_with_wikidata(
+        self,
+        topics: list,
+        task_id: str,
+        correlation_id: str = None
+    ) -> list:
+        """Enrich topics with Wikidata information"""
+        enriched_topics = []
+
+        logger.info(
+            "Processing topics and enriching with Wikidata",
+            task_id=task_id,
+            topics_count=len(topics),
+            correlation_id=correlation_id
+        )
+
+        for topic in topics:
+            name = topic.get("name", "")
+            wikidata_id = None
+
+            if name:
+                try:
+                    wikidata_info = await wikidata_client.enrich_topic(
+                        topic=name,
+                        language="pt",
+                        correlation_id=correlation_id
+                    )
+
+                    if wikidata_info:
+                        wikidata_id = wikidata_info.get("id", "")
+                        logger.info(
+                            "Topic enriched with Wikidata",
+                            task_id=task_id,
+                            topic_name=name,
+                            wikidata_id=wikidata_id,
+                            correlation_id=correlation_id
+                        )
+                    else:
+                        logger.warning(
+                            "No Wikidata found for topic",
+                            task_id=task_id,
+                            topic_name=name,
+                            correlation_id=correlation_id
+                        )
+
+                except Exception as e:
+                    logger.warning(
+                        "Failed to enrich topic with Wikidata",
+                        task_id=task_id,
+                        topic_name=name,
+                        error=str(e),
+                        correlation_id=correlation_id
+                    )
+
+            topic_payload = {
+                "name": name,
+                "wikidataId": wikidata_id,
+                "language": "pt"
+            }
+
+            enriched_topics.append(topic_payload)
+
+        return enriched_topics
+
     def can_process(self, task: Task) -> bool:
         result = task.type == TaskType.DEFINING_TOPICS
         logger.info(
@@ -82,60 +146,11 @@ class DefiningTopicsProcessor(BaseProcessor):
             )
 
             topics_from_ai = result.get("topics", [])
-            final_topics = []
-
-            logger.info(
-                "Processing topics and enriching with Wikidata",
+            final_topics = await self._enrich_topics_with_wikidata(
+                topics=topics_from_ai,
                 task_id=task.id,
-                topics_count=len(topics_from_ai),
                 correlation_id=task.id
             )
-
-            for topic in topics_from_ai:
-                name = topic.get("name", "")
-                wikidata_id = None
-
-                if name:
-                    try:
-                        wikidata_info = await wikidata_client.enrich_topic(
-                            topic=name,
-                            language="pt",
-                            correlation_id=task.id
-                        )
-
-                        if wikidata_info:
-                            wikidata_id = wikidata_info.get("id", "")
-                            logger.info(
-                                "Topic enriched with Wikidata",
-                                task_id=task.id,
-                                topic_name=name,
-                                wikidata_id=wikidata_id,
-                                correlation_id=task.id
-                            )
-                        else:
-                            logger.warning(
-                                "No Wikidata found for topic",
-                                task_id=task.id,
-                                topic_name=name,
-                                correlation_id=task.id
-                            )
-
-                    except Exception as e:
-                        logger.warning(
-                            "Failed to enrich topic with Wikidata",
-                            task_id=task.id,
-                            topic_name=name,
-                            error=str(e),
-                            correlation_id=task.id
-                        )
-
-                topic_payload = {
-                    "name": name,
-                    "wikidataId": wikidata_id,
-                    "language": "pt"
-                }
-
-                final_topics.append(topic_payload)
 
             enriched_count = sum(1 for t in final_topics if t.get("wikidataId"))
             logger.info(
