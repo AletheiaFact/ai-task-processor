@@ -62,18 +62,22 @@ class DefiningTopicsProvider:
     async def _identify_topics_with_openai(self, text: str, model: str, correlation_id: str = None) -> List[Dict[str, Any]]:
         """Use OpenAI to identify topics in the text"""
         prompt = f"""
-        Analyze the following text and identify the main topics discussed.
+        Analyze the following text and identify the main BROAD TOPICS discussed.
+
+        IMPORTANT REQUIREMENTS:
+        1. Return topic names in Portuguese (pt-BR)
+        2. Use GENERAL categories that exist in knowledge bases (e.g., "Crime", "Política", "Economia", "Saúde")
+        3. Avoid overly specific event descriptions
+        4. Use single-word or simple 2-word topics when possible
+
         Return the result as a JSON array with the following structure for each topic found:
         [
             {{
-                "name": "Topic name",
+                "name": "Broad topic name in Portuguese",
                 "confidence": 0.95,
                 "context": "Brief context of the topic in the text"
             }}
         ]
-
-        First try to access the url's and find possible topics from the page. If the url is not found, use the text to identify the topics.
-        Url to access: {url}
 
         Text to analyze: "{text}"
 
@@ -88,12 +92,31 @@ class DefiningTopicsProvider:
                 correlation_id=correlation_id
             )
 
-            # Parse the JSON response
+            logger.info(
+                "OpenAI full response",
+                response=response,
+                correlation_id=correlation_id
+            )
+
             import json
-            content = response.get('choices', [{}])[0].get('message', {}).get('content', '[]')
+            content = response.get('choices', [{}])[0].get('text', '[]')
+
+            logger.info(
+                "Raw OpenAI response content before JSON parsing",
+                content=content,
+                content_type=type(content),
+                correlation_id=correlation_id
+            )
+
             topics = json.loads(content)
 
-            print(f'topics: {topics}')
+            logger.info(
+                "Parsed topics from OpenAI",
+                topics=topics,
+                topics_count=len(topics),
+                correlation_id=correlation_id
+            )
+
             return topics
 
         except Exception as e:
@@ -112,7 +135,7 @@ class DefiningImpactAreaProvider:
         return True
 
     async def define_impact_areas(self, text: str, model: str, correlation_id: str = None) -> Dict[str, Any]:
-        """Define impact areas from the given text using OpenAI"""
+        """Define impact area from the given text using OpenAI"""
 
         if settings.openai_api_key == "your_openai_api_key_here":
             logger.info(
@@ -122,31 +145,24 @@ class DefiningImpactAreaProvider:
             )
             return self._mock_impact_areas(text)
 
-        impact_areas = await self._identify_impact_areas_with_openai(text, model, correlation_id)
+        impact_area = await self._identify_impact_areas_with_openai(text, model, correlation_id)
 
         return {
-            "impact_areas": impact_areas,
+            "impact_area": impact_area,
             "model": model,
             "usage": {"prompt_tokens": len(text.split()), "total_tokens": len(text.split())}
         }
 
     def _mock_impact_areas(self, text: str) -> Dict[str, Any]:
         """Mock impact area identification for testing"""
-        mock_impact_areas = [
-            {
-                "name": "Social Impact",
-                "description": "Affects social structures and relationships",
-                "confidence": 0.90
-            },
-            {
-                "name": "Economic Impact",
-                "description": "Influences economic conditions and markets",
-                "confidence": 0.85
-            }
-        ]
+        mock_impact_area = {
+            "name": "Social Impact",
+            "description": "Affects social structures and relationships",
+            "confidence": 0.90
+        }
 
         return {
-            "impact_areas": mock_impact_areas,
+            "impact_area": mock_impact_area,
             "model": "mock",
             "usage": {"prompt_tokens": len(text.split()), "total_tokens": len(text.split())}
         }
@@ -154,23 +170,23 @@ class DefiningImpactAreaProvider:
     # TODO: at place using a text to identify the impact area
     # we need request the wikidata to fetch possible impact area related with personality
     # then we need abstract the VR context informations to identify the impact area also
-    async def _identify_impact_areas_with_openai(self, text: str, model: str, correlation_id: str = None) -> List[Dict[str, Any]]:
-        """Use OpenAI to identify impact areas in the text"""
+    async def _identify_impact_areas_with_openai(self, text: str, model: str, correlation_id: str = None) -> Dict[str, Any]:
+        """Use OpenAI to identify the primary impact area in the text"""
         prompt = f"""
-        Analyze the following text and identify the main impact areas.
-        Return the result as a JSON array with the following structure for each impact area:
-        [
-            {{
-                "name": "Impact area name",
-                "description": "Description of the impact",
-                "confidence": 0.95
-            }}
-        ]
+        Analyze the following text and identify the PRIMARY impact area.
+        IMPORTANT: Return the impact area name and description in Portuguese (pt-BR).
+
+        Return the result as a JSON object with the following structure:
+        {{
+            "name": "Impact area name in Portuguese",
+            "description": "Description of the impact in Portuguese",
+            "confidence": 0.95
+        }}
 
         Text to analyze: "{text}"
 
-        If no clear impact areas are found, return an empty array [].
-        Only return the JSON array, no additional text.
+        Focus on identifying the SINGLE most relevant impact area.
+        Only return the JSON object, no additional text.
         """
 
         try:
@@ -180,18 +196,39 @@ class DefiningImpactAreaProvider:
                 correlation_id=correlation_id
             )
 
+            logger.info(
+                "OpenAI full response",
+                response=response,
+                correlation_id=correlation_id
+            )
+
             import json
-            content = response.get('choices', [{}])[0].get('message', {}).get('content', '[]')
-            impact_areas = json.loads(content)
-            return impact_areas
+            content = response.get('choices', [{}])[0].get('text', '{}')
+
+            logger.info(
+                "Raw OpenAI response content before JSON parsing",
+                content=content,
+                content_type=type(content),
+                correlation_id=correlation_id
+            )
+
+            impact_area = json.loads(content)
+
+            logger.info(
+                "Parsed impact area from OpenAI",
+                impact_area=impact_area,
+                correlation_id=correlation_id
+            )
+
+            return impact_area
 
         except Exception as e:
             logger.error(
-                "Failed to identify impact areas with OpenAI",
+                "Failed to identify impact area with OpenAI",
                 error=str(e),
                 correlation_id=correlation_id
             )
-            return []
+            return {}
 
 
 class DefiningSeverityProvider:
@@ -265,7 +302,7 @@ class DefiningSeverityProvider:
             )
 
             import json
-            content = response.get('choices', [{}])[0].get('message', {}).get('content', '{}')
+            content = response.get('choices', [{}])[0].get('text', '{}')
             severity = json.loads(content)
             return severity
 

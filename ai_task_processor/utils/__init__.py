@@ -4,10 +4,10 @@ from .shutdown import shutdown_manager
 
 __all__ = [
     "setup_logging",
-    "get_logger", 
+    "get_logger",
     "exponential_backoff_retry",
     "retry",
     "RetryableError",
     "NonRetryableError",
-    "shutdown_manager"
+    "shutdown_manager",
 ]

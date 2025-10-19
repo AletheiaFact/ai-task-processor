@@ -195,6 +195,77 @@ class WikidataClient:
             )
             raise NonRetryableError(f"Wikidata entity fetch failed: {e}")
 
+    async def enrich_topic(
+        self,
+        topic: str,
+        language: str = "en",
+        correlation_id: str = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Enrich topic data by searching Wikidata for general concepts/topics.
+
+        This function searches for a broad topic/concept (not necessarily a person)
+        and returns structured Wikidata information.
+
+        Args:
+            topic: Topic name (e.g., "Crime", "Política", "Economia")
+            language: Language code (default: "en")
+            correlation_id: Correlation ID for logging
+
+        Returns:
+            Wikidata entity info or None if not found
+        """
+        try:
+            results = await self.search_person(
+                name=topic,
+                language=language,
+                limit=10,
+                correlation_id=correlation_id
+            )
+
+            if not results:
+                logger.info(
+                    "No Wikidata results found for topic",
+                    topic=topic,
+                    correlation_id=correlation_id
+                )
+                return None
+
+            # For topics, we want the most general/popular result
+            # Wikidata returns results by relevance, so take the first
+            best_match = results[0]
+
+            wikidata_entity = {
+                "id": best_match.get("id"),
+                "url": best_match.get("url", f"https://www.wikidata.org/wiki/{best_match.get('id')}"),
+                "label": best_match.get("label", topic),
+                "description": best_match.get("description"),
+                "aliases": best_match.get("aliases", [])
+            }
+
+            logger.info(
+                "Successfully enriched topic with Wikidata",
+                topic=topic,
+                wikidata_id=wikidata_entity["id"],
+                wikidata_label=wikidata_entity["label"],
+                correlation_id=correlation_id
+            )
+
+            return wikidata_entity
+
+        except RetryableError:
+            # Allow retry errors to propagate
+            raise
+
+        except Exception as e:
+            logger.warning(
+                "Failed to enrich topic with Wikidata",
+                topic=topic,
+                error=str(e),
+                correlation_id=correlation_id
+            )
+            return None
+
     async def enrich_personality(
         self,
         name: str,

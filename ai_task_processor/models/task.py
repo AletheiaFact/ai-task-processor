@@ -44,7 +44,7 @@ class Task(BaseModel):
 class TaskResult(BaseModel):
     task_id: str
     status: TaskStatus
-    output_data: Optional[Dict[str, Any]] = None
+    output_data: Optional[Any] = None
     error_message: Optional[str] = None
 
 
@@ -115,7 +115,7 @@ class ImpactArea(BaseModel):
     wikidata: Optional[WikidataEntity] = None  # Enriched Wikidata info
 
 class DefiningImpactAreaOutput(BaseModel):
-    impact_areas: List[ImpactArea]
+    impact_area: ImpactArea
     model: str
     usage: Dict[str, int]
 

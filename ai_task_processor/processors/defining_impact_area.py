@@ -75,52 +75,77 @@ class DefiningImpactAreaProcessor(BaseProcessor):
             )
 
             logger.info(
-                "Identified impact areas from AI model",
+                "Identified impact area from AI model",
                 task_id=task.id,
-                impact_areas_count=len(result.get("impact_areas", [])),
+                impact_area_name=result.get("impact_area", {}).get("name"),
                 correlation_id=task.id
             )
 
-            # Enrich impact areas with Wikidata information
-            impact_areas = result.get("impact_areas", [])
-            if impact_areas:
+            impact_area = result.get("impact_area", {})
+            name = impact_area.get("name", "")
+            description = impact_area.get("description", "")
+            wikidata_id = None
+
+            if name:
                 logger.info(
-                    "Enriching impact areas with Wikidata",
+                    "Enriching impact area with Wikidata",
                     task_id=task.id,
-                    impact_areas_count=len(impact_areas),
+                    impact_area_name=name,
                     correlation_id=task.id
                 )
 
                 try:
-                    enriched_impact_areas = await self._enrich_impact_areas_with_wikidata(
-                        impact_areas=impact_areas,
+                    wikidata_info = await wikidata_client.enrich_topic(
+                        topic=name,
+                        language="pt",
                         correlation_id=task.id
                     )
-                    result["impact_areas"] = enriched_impact_areas
 
-                    # Log enrichment statistics
-                    enriched_count = sum(1 for ia in enriched_impact_areas if ia.get("wikidata"))
-                    logger.info(
-                        "Wikidata enrichment completed",
-                        task_id=task.id,
-                        total_impact_areas=len(enriched_impact_areas),
-                        enriched_count=enriched_count,
-                        correlation_id=task.id
-                    )
+                    if wikidata_info:
+                        wikidata_id = wikidata_info.get("id", "")
+                        logger.info(
+                            "Wikidata enrichment completed",
+                            task_id=task.id,
+                            impact_area_name=name,
+                            wikidata_id=wikidata_id,
+                            correlation_id=task.id
+                        )
+                    else:
+                        logger.warning(
+                            "No Wikidata information found",
+                            task_id=task.id,
+                            impact_area_name=name,
+                            correlation_id=task.id
+                        )
 
                 except Exception as e:
-                    # Don't fail the entire task if Wikidata enrichment fails
                     logger.warning(
-                        "Wikidata enrichment failed, continuing with unenriched data",
+                        "Wikidata enrichment failed, continuing without Wikidata ID",
                         task_id=task.id,
+                        impact_area_name=name,
                         error=str(e),
                         correlation_id=task.id
                     )
 
+            final_result = {
+                "name": name,
+                "description": description,
+                "wikidataId": wikidata_id,
+                "language": "pt"
+            }
+
+            logger.info(
+                "Impact area processing completed successfully",
+                task_id=task.id,
+                name=name,
+                has_wikidata_id=bool(wikidata_id),
+                correlation_id=task.id
+            )
+
             return TaskResult(
                 task_id=task.id,
                 status=TaskStatus.SUCCEEDED,
-                output_data=result
+                output_data=final_result
             )
 
         except RetryableError as e:
@@ -148,44 +173,3 @@ class DefiningImpactAreaProcessor(BaseProcessor):
                 status=TaskStatus.FAILED,
                 error_message=f"Defining impact area failed: {str(e)}"
             )
-
-    async def _enrich_impact_areas_with_wikidata(
-        self,
-        impact_areas: list,
-        correlation_id: str = None
-    ) -> list:
-        """Enrich impact areas with Wikidata information"""
-        enriched_impact_areas = []
-
-        for impact_area in impact_areas:
-            enriched = impact_area.copy()
-            area_name = impact_area.get("name")
-
-            if area_name:
-                try:
-                    wikidata_info = await wikidata_client.enrich_personality(
-                        name=area_name,
-                        mentioned_as=area_name,
-                        language="en",
-                        correlation_id=correlation_id
-                    )
-
-                    if wikidata_info:
-                        enriched["wikidata"] = wikidata_info
-                    else:
-                        enriched["wikidata"] = None
-
-                except Exception as e:
-                    logger.warning(
-                        "Failed to enrich impact area with Wikidata",
-                        area_name=area_name,
-                        error=str(e),
-                        correlation_id=correlation_id
-                    )
-                    enriched["wikidata"] = None
-            else:
-                enriched["wikidata"] = None
-
-            enriched_impact_areas.append(enriched)
-
-        return enriched_impact_areas

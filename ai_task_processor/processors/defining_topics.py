@@ -81,46 +81,75 @@ class DefiningTopicsProcessor(BaseProcessor):
                 correlation_id=task.id
             )
 
-            # Enrich topics with Wikidata information
-            topics = result.get("topics", [])
-            if topics:
-                logger.info(
-                    "Enriching topics with Wikidata",
-                    task_id=task.id,
-                    topics_count=len(topics),
-                    correlation_id=task.id
-                )
+            topics_from_ai = result.get("topics", [])
+            final_topics = []
 
-                try:
-                    enriched_topics = await self._enrich_topics_with_wikidata(
-                        topics=topics,
-                        correlation_id=task.id
-                    )
-                    result["topics"] = enriched_topics
+            logger.info(
+                "Processing topics and enriching with Wikidata",
+                task_id=task.id,
+                topics_count=len(topics_from_ai),
+                correlation_id=task.id
+            )
 
-                    # Log enrichment statistics
-                    enriched_count = sum(1 for t in enriched_topics if t.get("wikidata"))
-                    logger.info(
-                        "Wikidata enrichment completed",
-                        task_id=task.id,
-                        total_topics=len(enriched_topics),
-                        enriched_count=enriched_count,
-                        correlation_id=task.id
-                    )
+            for topic in topics_from_ai:
+                name = topic.get("name", "")
+                wikidata_id = None
 
-                except Exception as e:
-                    # Don't fail the entire task if Wikidata enrichment fails
-                    logger.warning(
-                        "Wikidata enrichment failed, continuing with unenriched data",
-                        task_id=task.id,
-                        error=str(e),
-                        correlation_id=task.id
-                    )
+                if name:
+                    try:
+                        wikidata_info = await wikidata_client.enrich_topic(
+                            topic=name,
+                            language="pt",
+                            correlation_id=task.id
+                        )
+
+                        if wikidata_info:
+                            wikidata_id = wikidata_info.get("id", "")
+                            logger.info(
+                                "Topic enriched with Wikidata",
+                                task_id=task.id,
+                                topic_name=name,
+                                wikidata_id=wikidata_id,
+                                correlation_id=task.id
+                            )
+                        else:
+                            logger.warning(
+                                "No Wikidata found for topic",
+                                task_id=task.id,
+                                topic_name=name,
+                                correlation_id=task.id
+                            )
+
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to enrich topic with Wikidata",
+                            task_id=task.id,
+                            topic_name=name,
+                            error=str(e),
+                            correlation_id=task.id
+                        )
+
+                topic_payload = {
+                    "name": name,
+                    "wikidataId": wikidata_id,
+                    "language": "pt"
+                }
+
+                final_topics.append(topic_payload)
+
+            enriched_count = sum(1 for t in final_topics if t.get("wikidataId"))
+            logger.info(
+                "Topics processing completed successfully",
+                task_id=task.id,
+                total_topics=len(final_topics),
+                enriched_count=enriched_count,
+                correlation_id=task.id
+            )
 
             return TaskResult(
                 task_id=task.id,
                 status=TaskStatus.SUCCEEDED,
-                output_data=result
+                output_data=final_topics
             )
 
         except RetryableError as e:
@@ -148,44 +177,3 @@ class DefiningTopicsProcessor(BaseProcessor):
                 status=TaskStatus.FAILED,
                 error_message=f"Defining topics failed: {str(e)}"
             )
-
-    async def _enrich_topics_with_wikidata(
-        self,
-        topics: list,
-        correlation_id: str = None
-    ) -> list:
-        """Enrich topics with Wikidata information"""
-        enriched_topics = []
-
-        for topic in topics:
-            enriched = topic.copy()
-            topic_name = topic.get("name")
-
-            if topic_name:
-                try:
-                    wikidata_info = await wikidata_client.enrich_personality(
-                        name=topic_name,
-                        mentioned_as=topic_name,
-                        language="en",
-                        correlation_id=correlation_id
-                    )
-
-                    if wikidata_info:
-                        enriched["wikidata"] = wikidata_info
-                    else:
-                        enriched["wikidata"] = None
-
-                except Exception as e:
-                    logger.warning(
-                        "Failed to enrich topic with Wikidata",
-                        topic_name=topic_name,
-                        error=str(e),
-                        correlation_id=correlation_id
-                    )
-                    enriched["wikidata"] = None
-            else:
-                enriched["wikidata"] = None
-
-            enriched_topics.append(enriched)
-
-        return enriched_topics
