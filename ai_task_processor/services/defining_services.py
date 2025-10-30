@@ -232,92 +232,249 @@ class DefiningImpactAreaProvider:
 
 
 class DefiningSeverityProvider:
-    """OpenAI provider for defining severity levels"""
+    """Provider for defining severity with AI reasoning"""
 
     def supports_model(self, model: str) -> bool:
+        """Check if model is supported - accepts any OpenAI model"""
         return True
 
-    async def define_severity(self, text: str, model: str, correlation_id: str = None) -> Dict[str, Any]:
-        """Define severity from the given text using OpenAI"""
+    async def define_severity(
+        self,
+        enriched_data: Dict[str, Any],
+        model: str,
+        correlation_id: str = None
+    ) -> Dict[str, Any]:
+        """
+        Define severity level using AI reasoning
 
+        Args:
+            enriched_data: Dictionary containing:
+                - impact_area: Wikidata-enriched impact area data
+                - topics: List of Wikidata-enriched topic data
+                - personality: Optional Wikidata-enriched personality data
+                - text: Text content being verified
+            model: OpenAI model to use for reasoning
+            correlation_id: Correlation ID for tracking
+
+        Returns:
+            Dictionary with severity classification result
+        """
+        # Check if using mock mode
         if settings.openai_api_key == "your_openai_api_key_here":
             logger.info(
                 "Using mock severity definition (no API key provided)",
                 model=model,
                 correlation_id=correlation_id
             )
-            return self._mock_severity(text)
+            return self._mock_severity(enriched_data)
 
-        severity = await self._assess_severity_with_openai(text, model, correlation_id)
+        # Build prompt for AI reasoning
+        prompt = self._build_severity_prompt(enriched_data)
+
+        # Classify severity with AI
+        severity_enum = await self._classify_severity_with_ai(prompt, model, correlation_id)
 
         return {
-            "severity": severity,
+            "severity": severity_enum,
             "model": model,
-            "usage": {"prompt_tokens": len(text.split()), "total_tokens": len(text.split())}
+            "usage": {"model_used": model}
         }
 
-    def _mock_severity(self, text: str) -> Dict[str, Any]:
-        """Mock severity assessment for testing"""
-        mock_severity = {
-            "level": "medium",
-            "score": 5.5,
-            "reasoning": "The text describes issues of moderate concern",
-            "factors": ["Political tension", "Social unrest", "Economic uncertainty"]
-        }
-
+    def _mock_severity(self, enriched_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Mock severity classification for testing without API key"""
         return {
-            "severity": mock_severity,
+            "severity": "medium_2",
             "model": "mock",
-            "usage": {"prompt_tokens": len(text.split()), "total_tokens": len(text.split())}
+            "usage": {"model_used": "mock"}
         }
 
-    async def _assess_severity_with_openai(self, text: str, model: str, correlation_id: str = None) -> Dict[str, Any]:
-        """Use OpenAI to assess severity in the text"""
-        prompt = f"""
-        Analyze the following text and assess its severity level.
-        Return the result as a JSON object with the following structure:
-        {{
-            "level": "low|medium|high|critical",
-            "score": 0-10,
-            "reasoning": "Explanation of the severity assessment",
-            "factors": ["Factor 1", "Factor 2", "Factor 3"]
-        }}
-
-        Text to analyze: "{text}"
-
-        Severity levels:
-        - low (0-2.5): Minor issues with limited impact
-        - medium (2.5-5): Moderate issues requiring attention
-        - high (5-7.5): Serious issues with significant impact
-        - critical (7.5-10): Severe issues requiring immediate action
-
-        Only return the JSON object, no additional text.
+    def _build_severity_prompt(self, enriched_data: Dict[str, Any]) -> str:
         """
+        Build structured prompt for AI to reason about severity
+        Includes all Wikidata contextual signals for holistic analysis
+        """
+        impact_area = enriched_data["impact_area"]
+        topics = enriched_data["topics"]
+        personality = enriched_data.get("personality")
+        text = enriched_data.get("text", "")
 
-        try:
-            response = await openai_client.create_completion(
-                prompt=prompt,
-                model=model,
-                correlation_id=correlation_id
-            )
+        prompt = """You are a reasoning model for classifying the severity of fact-check verification requests.
 
-            import json
-            content = response.get('choices', [{}])[0].get('text', '{}')
-            severity = json.loads(content)
-            return severity
+Given contextual information about the impact area, topics, personality (if present), and text content,
+analyze how severe or important this verification is according to these severity levels:
 
-        except Exception as e:
-            logger.error(
-                "Failed to assess severity with OpenAI",
-                error=str(e),
-                correlation_id=correlation_id
-            )
-            return {
-                "level": "unknown",
-                "score": 0,
-                "reasoning": "Failed to assess severity",
-                "factors": []
-            }
+**Severity Levels (from highest to lowest):**
+- critical: Extremely urgent, widespread impact, high public safety concern (e.g., public health emergencies, election fraud, national security threats)
+- high_3: Very high severity with significant immediate consequences (e.g., major political scandals, serious misinformation affecting public policy)
+- high_2: High severity with substantial potential impact (e.g., influential figures spreading false health information)
+- high_1: High severity with notable implications (e.g., misinformation about significant social/economic issues)
+- medium_3: Moderate-high severity (e.g., false claims by regional influencers, local policy issues)
+- medium_2: Moderate severity (e.g., debatable claims with moderate reach)
+- medium_1: Moderate-low severity (e.g., minor factual errors with limited impact)
+- low_3: Low-moderate severity (e.g., entertainment/celebrity rumors with some public interest)
+- low_2: Low severity with minimal impact (e.g., trivial misinformation, very limited reach)
+- low_1: Very low severity, limited scope (e.g., personal disputes, negligible audience)
+
+**Geographic Context:**
+Most verification requests originate from BRAZIL (Brazilian Portuguese content, Brazilian personalities/topics).
+However, you must evaluate severity considering BOTH:
+1. **Brazilian Impact:** How does this affect Brazilian society, politics, public health, or safety?
+2. **Global Relevance:** Does this have international implications or involve globally significant topics?
+
+A claim may have HIGH severity in Brazilian context even with moderate global metrics, and vice versa.
+
+**Context to Analyze:**
+
+"""
+
+        # Impact Area Context
+        prompt += f"""**Impact Area:**
+- Label: {impact_area.get('label', 'Unknown')}
+- Description: {impact_area.get('description', 'N/A')}
+- Sitelinks (global recognition): {impact_area.get('sitelinks', 0)}
+- Statements (data completeness): {impact_area.get('statements', 0)}
+- Inbound links (centrality in knowledge graph): {impact_area.get('inbound_links', 0)}
+- Pageviews (30-day public interest): {impact_area.get('pageviews', 0)}
+
+"""
+
+        # Topics Context
+        prompt += "**Topics:**\n"
+        for idx, topic in enumerate(topics, 1):
+            prompt += f"""  {idx}. {topic.get('label', 'Unknown')}
+     - Description: {topic.get('description', 'N/A')}
+     - Sitelinks: {topic.get('sitelinks', 0)}
+     - Statements: {topic.get('statements', 0)}
+     - Inbound links: {topic.get('inbound_links', 0)}
+     - Pageviews: {topic.get('pageviews', 0)}
+
+"""
+
+        # Personality Context (if exists)
+        if personality:
+            prompt += f"""**Personality:**
+- Name: {personality.get('label', 'Unknown')}
+- Description: {personality.get('description', 'N/A')}
+- Sitelinks: {personality.get('sitelinks', 0)}
+- Statements: {personality.get('statements', 0)}
+- Inbound links: {personality.get('inbound_links', 0)}
+- Pageviews: {personality.get('pageviews', 0)}
+- Social followers: {personality.get('followers', 0)}
+- Number of positions held: {len(personality.get('positions', []))}
+- Number of awards: {len(personality.get('awards', []))}
+
+"""
+
+        if text:
+            prompt += f"""**Text Content:**
+{text}
+
+"""
+
+        prompt += """**How to Interpret Wikidata Metrics:**
+
+**Sitelinks (Global Recognition):**
+- 200+: Globally significant topic/person (e.g., "Climate Change", "Barack Obama")
+- 100-199: High international recognition (e.g., "Nuclear Power", major politicians)
+- 50-99: Notable regional or specialized recognition
+- 10-49: Moderate recognition, often local/national figures
+- <10: Limited recognition, local issues or emerging topics
+
+**Pageviews (Public Interest - 30 days):**
+- 1M+: Extremely high public interest, trending globally
+- 100k-1M: High public interest, widely discussed
+- 10k-100k: Moderate interest, significant audience
+- 1k-10k: Low-moderate interest
+- <1k: Minimal public interest
+
+**Inbound Links (Knowledge Graph Centrality):**
+- 10k+: Highly connected, fundamental concept
+- 1k-10k: Well-connected, important topic
+- 100-1k: Moderately connected
+- <100: Loosely connected, specialized
+
+**Statements (Data Completeness):**
+- 500+: Very comprehensive, well-documented
+- 200-499: Well-documented
+- 100-199: Moderately documented
+- <100: Limited documentation
+
+**For Personalities - Social Followers:**
+- 10M+: Massive reach, national/international influencer
+- 1M-10M: Large reach, significant public figure
+- 100k-1M: Moderate reach, regional influencer
+- 10k-100k: Small-moderate reach
+- <10k: Limited reach
+
+**Analysis Instructions:**
+1. **Evaluate Brazilian Context First:** Is this about Brazilian politics, society, or public figures? Consider local impact severity.
+2. **Assess Global Relevance:** Does this involve international topics or have cross-border implications?
+3. **Personality Influence:** If present, how much reach do they have? High followers + Brazilian context = higher severity.
+4. **Topic Urgency:** Health, politics, safety = higher severity. Entertainment, sports = lower severity.
+5. **Impact Area Scope:** Does this affect public safety, democracy, health, or economic stability?
+6. **Public Engagement:** High pageviews indicate active public discussion, raising severity.
+7. **Text Content Analysis:** Read the actual claim - what specific harm could misinformation cause?
+
+**Brazilian Context Examples:**
+- Brazilian politician with 1M followers spreading election misinformation → HIGH severity (even with moderate global metrics)
+- Global warming claim in Brazilian Portuguese about Amazon deforestation → HIGH severity (Brazilian + global relevance)
+- Brazilian celebrity entertainment rumor → LOW-MEDIUM severity (limited real-world impact)
+- Health misinformation from Brazilian doctor/influencer → HIGH severity (public safety risk)
+
+**IMPORTANT:** Respond with ONLY ONE of the severity enum values listed above. No explanation, just the enum value.
+
+Severity level:"""
+
+        return prompt
+
+    async def _classify_severity_with_ai(
+        self,
+        prompt: str,
+        model: str,
+        correlation_id: str
+    ) -> str:
+        """
+        Call OpenAI to classify severity based on contextual reasoning
+        Returns one of the SeverityEnum values
+        """
+        logger.info("Calling OpenAI for severity classification",
+                   model=model, correlation_id=correlation_id)
+
+        response = await openai_client.create_completion(
+            prompt=prompt,
+            model=model,
+            correlation_id=correlation_id
+        )
+
+        # Extract severity enum from response
+        severity_text = response["choices"][0]["text"].strip().lower()
+
+        # Validate and normalize enum value
+        valid_severities = [
+            "critical", "high_3", "high_2", "high_1",
+            "medium_3", "medium_2", "medium_1",
+            "low_3", "low_2", "low_1"
+        ]
+
+        # Clean up response (remove any extra text)
+        for severity in valid_severities:
+            if severity in severity_text:
+                logger.info(
+                    "AI classified severity",
+                    severity=severity,
+                    correlation_id=correlation_id
+                )
+                return severity
+
+        # Fallback to medium_2 if AI response is unclear
+        logger.warning(
+            "AI returned unclear severity, using fallback",
+            response_text=severity_text,
+            correlation_id=correlation_id
+        )
+        return "medium_2"
+
+
 
 
 # Global provider instances

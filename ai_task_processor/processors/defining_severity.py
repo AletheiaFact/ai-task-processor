@@ -10,6 +10,16 @@ logger = get_logger(__name__)
 
 
 class DefiningSeverityProcessor(BaseProcessor):
+    """
+    Processor for defining verification request severity using AI reasoning
+
+    Follows the standard pattern:
+    - Validates input and extracts model from task.content
+    - Fetches rich Wikidata context (sitelinks, pageviews, inbound links, etc.)
+    - Uses defining_severity service to classify with AI
+    - Returns SeverityEnum value based on AI reasoning
+    """
+
     def can_process(self, task: Task) -> bool:
         result = task.type == TaskType.DEFINING_SEVERITY
         logger.info(
@@ -22,6 +32,10 @@ class DefiningSeverityProcessor(BaseProcessor):
         return result
 
     async def process(self, task: Task) -> TaskResult:
+        """
+        Process severity definition task using AI reasoning
+        Follows standard pattern: validate input, fetch context, call service
+        """
         try:
             logger.info(
                 "Starting DefiningSeverityProcessor.process",
@@ -34,102 +48,85 @@ class DefiningSeverityProcessor(BaseProcessor):
             if not task.content:
                 raise ValueError("Task content is missing or None")
 
-            # Handle different content formats
-            if isinstance(task.content, str):
-                default_model = settings.supported_models[0] if settings.supported_models else "o3-mini"
-                input_data = DefiningSeverityInput(
-                    text=task.content,
-                    model=default_model
-                )
-                logger.warning(
-                    "Task content is string format, using default supported model",
-                    task_id=task.id,
-                    default_model=input_data.model
-                )
-            elif isinstance(task.content, dict):
+            if isinstance(task.content, dict):
                 if "model" not in task.content:
                     raise ValueError("Model is required in task content")
                 input_data = DefiningSeverityInput(**task.content)
             else:
                 raise ValueError(f"Unsupported content type: {type(task.content)}")
 
-            # Validate that the requested model is supported
             if not defining_severity.supports_model(input_data.model):
                 raise ValueError(
                     f"Requested model '{input_data.model}' is not supported. "
-                    f"Supported models: {settings.supported_models}"
+                    f"Supported models: OpenAI models"
                 )
 
             logger.info(
                 "Processing defining severity task",
                 task_id=task.id,
-                text_length=len(input_data.text),
-                model=input_data.model
+                model=input_data.model,
+                has_personality=input_data.personalityWikidataId is not None,
+                topics_count=len(input_data.topicsWikidataIds)
             )
 
-            # Use the defining severity provider to assess severity
+            personality = None
+            if input_data.personalityWikidataId:
+                logger.info("Fetching personality data by ID",
+                           wikidata_id=input_data.personalityWikidataId)
+                personality = await wikidata_client.get_personality_data(
+                    wikidata_id=input_data.personalityWikidataId,
+                    correlation_id=task.id
+                )
+
+            topics_context = []
+            for topic_id in input_data.topicsWikidataIds:
+                logger.info("Fetching topic data by ID", wikidata_id=topic_id)
+                topic_data = await wikidata_client.get_topic_data_by_id(
+                    wikidata_id=topic_id,
+                    correlation_id=task.id
+                )
+                topics_context.append(topic_data)
+
+            logger.info("Fetching impact area data by ID",
+                       wikidata_id=input_data.impactAreaWikidataId)
+            impact_area_context = await wikidata_client.get_impact_area_data_by_id(
+                wikidata_id=input_data.impactAreaWikidataId,
+                correlation_id=task.id
+            )
+
+            enriched_data = {
+                "impact_area": impact_area_context,
+                "topics": topics_context,
+                "personality": personality,
+                "text": input_data.text
+            }
+
             result = await defining_severity.define_severity(
-                text=input_data.text,
+                enriched_data=enriched_data,
                 model=input_data.model,
                 correlation_id=task.id
             )
 
             logger.info(
-                "Assessed severity from AI model",
+                "Severity classification completed",
                 task_id=task.id,
-                severity_level=result.get("severity", {}).get("level"),
-                severity_score=result.get("severity", {}).get("score"),
+                severity=result.get("severity"),
+                model=result.get("model"),
                 correlation_id=task.id
             )
-
-            # Enrich severity with Wikidata information (for severity level classification)
-            severity_data = result.get("severity", {})
-            if severity_data:
-                logger.info(
-                    "Enriching severity classification with Wikidata",
-                    task_id=task.id,
-                    severity_level=severity_data.get("level"),
-                    correlation_id=task.id
-                )
-
-                try:
-                    enriched_severity = await self._enrich_severity_with_wikidata(
-                        severity=severity_data,
-                        correlation_id=task.id
-                    )
-                    result["severity"] = enriched_severity
-
-                    # Log enrichment status
-                    has_wikidata = enriched_severity.get("wikidata") is not None
-                    logger.info(
-                        "Wikidata enrichment completed",
-                        task_id=task.id,
-                        has_wikidata=has_wikidata,
-                        correlation_id=task.id
-                    )
-
-                except Exception as e:
-                    # Don't fail the entire task if Wikidata enrichment fails
-                    logger.warning(
-                        "Wikidata enrichment failed, continuing with unenriched data",
-                        task_id=task.id,
-                        error=str(e),
-                        correlation_id=task.id
-                    )
 
             return TaskResult(
                 task_id=task.id,
                 status=TaskStatus.SUCCEEDED,
-                output_data=result
+                output_data={"severity": result.get("severity")}
             )
 
         except RetryableError as e:
             logger.warning(
-                "Defining severity processing failed with retryable error",
+                "Severity processing failed with retryable error",
                 task_id=task.id,
                 error=str(e)
             )
-
             return TaskResult(
                 task_id=task.id,
                 status=TaskStatus.FAILED,
@@ -138,52 +135,13 @@ class DefiningSeverityProcessor(BaseProcessor):
 
         except Exception as e:
             logger.error(
-                "Defining severity processing failed",
+                "Severity processing failed",
                 task_id=task.id,
-                error=str(e)
+                error=str(e),
+                exc_info=True
             )
-
             return TaskResult(
                 task_id=task.id,
                 status=TaskStatus.FAILED,
-                error_message=f"Defining severity failed: {str(e)}"
+                error_message=f"Severity calculation failed: {str(e)}"
             )
-
-    async def _enrich_severity_with_wikidata(
-        self,
-        severity: dict,
-        correlation_id: str = None
-    ) -> dict:
-        """Enrich severity classification with Wikidata information"""
-        enriched = severity.copy()
-        severity_level = severity.get("level")
-
-        if severity_level:
-            try:
-                # Search for severity classification or risk level concept in Wikidata
-                search_term = f"severity {severity_level}"
-
-                wikidata_info = await wikidata_client.enrich_personality(
-                    name=search_term,
-                    mentioned_as=severity_level,
-                    language="en",
-                    correlation_id=correlation_id
-                )
-
-                if wikidata_info:
-                    enriched["wikidata"] = wikidata_info
-                else:
-                    enriched["wikidata"] = None
-
-            except Exception as e:
-                logger.warning(
-                    "Failed to enrich severity with Wikidata",
-                    severity_level=severity_level,
-                    error=str(e),
-                    correlation_id=correlation_id
-                )
-                enriched["wikidata"] = None
-        else:
-            enriched["wikidata"] = None
-
-        return enriched

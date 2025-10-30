@@ -65,6 +65,9 @@ class DefiningImpactAreaInput(BaseModel):
     model: str = "o3-mini"
 
 class DefiningSeverityInput(BaseModel):
+    impactAreaWikidataId: str
+    topicsWikidataIds: List[str]
+    personalityWikidataId: Optional[str] = None
     text: str
     model: str = "o3-mini"
 
