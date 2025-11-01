@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field, field_validator
+from typing import Any, Dict, List, Optional, Union
 from enum import Enum
 from datetime import datetime
 
@@ -64,10 +64,31 @@ class DefiningImpactAreaInput(BaseModel):
     text: str
     model: str = "o3-mini"
 
+class SeverityImpactArea(BaseModel):
+    """Impact area information for severity assessment"""
+    name: str
+    language: str = "pt"
+    wikidataId: Optional[str] = None
+
+class SeverityTopic(BaseModel):
+    """Topic information for severity assessment"""
+    name: str
+    language: str = "pt"
+    wikidataId: Optional[str] = None
+
+class SeverityPersonality(BaseModel):
+    """Personality information for severity assessment"""
+    name: str
+    wikidataId: Optional[str] = None
+
 class DefiningSeverityInput(BaseModel):
-    impactAreaWikidataId: str
-    topicsWikidataIds: List[str]
-    personalityWikidataId: Optional[str] = None
+    """
+    New format: Receives full objects with name/language/wikidataId
+    Falls back to name when wikidataId is not available
+    """
+    impactArea: Optional[SeverityImpactArea] = None
+    topics: List[SeverityTopic] = []
+    personality: Optional[SeverityPersonality] = None
     text: str
     model: str = "o3-mini"
 

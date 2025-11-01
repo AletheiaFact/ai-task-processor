@@ -65,39 +65,135 @@ class DefiningSeverityProcessor(BaseProcessor):
                 "Processing defining severity task",
                 task_id=task.id,
                 model=input_data.model,
-                has_personality=input_data.personalityWikidataId is not None,
-                topics_count=len(input_data.topicsWikidataIds)
+                has_personality=input_data.personality is not None,
+                topics_count=len(input_data.topics),
+                has_impact_area=input_data.impactArea is not None
             )
 
-            personality = None
-            if input_data.personalityWikidataId:
-                logger.info("Fetching personality data by ID",
-                           wikidata_id=input_data.personalityWikidataId)
-                personality = await wikidata_client.get_personality_data(
-                    wikidata_id=input_data.personalityWikidataId,
-                    correlation_id=task.id
-                )
+            personality_context = None
+            if input_data.personality:
+                if input_data.personality.wikidataId:
+                    try:
+                        logger.info(
+                            "Fetching personality data by ID",
+                            wikidata_id=input_data.personality.wikidataId,
+                            name=input_data.personality.name,
+                            correlation_id=task.id
+                        )
+                        personality_context = await wikidata_client.get_personality_data(
+                            wikidata_id=input_data.personality.wikidataId,
+                            correlation_id=task.id
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to fetch personality data, using provided name",
+                            wikidata_id=input_data.personality.wikidataId,
+                            name=input_data.personality.name,
+                            error=str(e),
+                            correlation_id=task.id
+                        )
+                        personality_context = {
+                            "label": input_data.personality.name,
+                            "source": "user_provided"
+                        }
+                else:
+                    logger.info(
+                        "Using personality name directly (no Wikidata ID)",
+                        name=input_data.personality.name,
+                        correlation_id=task.id
+                    )
+                    personality_context = {
+                        "label": input_data.personality.name,
+                        "source": "user_provided"
+                    }
 
             topics_context = []
-            for topic_id in input_data.topicsWikidataIds:
-                logger.info("Fetching topic data by ID", wikidata_id=topic_id)
-                topic_data = await wikidata_client.get_topic_data_by_id(
-                    wikidata_id=topic_id,
-                    correlation_id=task.id
-                )
-                topics_context.append(topic_data)
+            for topic in input_data.topics:
+                if topic.wikidataId:
+                    try:
+                        logger.info(
+                            "Fetching topic data by ID",
+                            wikidata_id=topic.wikidataId,
+                            name=topic.name,
+                            language=topic.language,
+                            correlation_id=task.id
+                        )
+                        topic_data = await wikidata_client.get_topic_data_by_id(
+                            wikidata_id=topic.wikidataId,
+                            correlation_id=task.id
+                        )
+                        topics_context.append(topic_data)
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to fetch topic data, using provided name",
+                            wikidata_id=topic.wikidataId,
+                            name=topic.name,
+                            error=str(e),
+                            correlation_id=task.id
+                        )
+                        topics_context.append({
+                            "label": topic.name,
+                            "language": topic.language,
+                            "source": "user_provided"
+                        })
+                else:
+                    logger.info(
+                        "Using topic name directly (no Wikidata ID)",
+                        name=topic.name,
+                        language=topic.language,
+                        correlation_id=task.id
+                    )
+                    topics_context.append({
+                        "label": topic.name,
+                        "language": topic.language,
+                        "source": "user_provided"
+                    })
 
-            logger.info("Fetching impact area data by ID",
-                       wikidata_id=input_data.impactAreaWikidataId)
-            impact_area_context = await wikidata_client.get_impact_area_data_by_id(
-                wikidata_id=input_data.impactAreaWikidataId,
-                correlation_id=task.id
-            )
+            impact_area_context = None
+            if input_data.impactArea:
+                if input_data.impactArea.wikidataId:
+                    try:
+                        logger.info(
+                            "Fetching impact area data by ID",
+                            wikidata_id=input_data.impactArea.wikidataId,
+                            name=input_data.impactArea.name,
+                            language=input_data.impactArea.language,
+                            correlation_id=task.id
+                        )
+                        impact_area_context = await wikidata_client.get_impact_area_data_by_id(
+                            wikidata_id=input_data.impactArea.wikidataId,
+                            correlation_id=task.id
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to fetch impact area data, using provided name",
+                            wikidata_id=input_data.impactArea.wikidataId,
+                            name=input_data.impactArea.name,
+                            error=str(e),
+                            correlation_id=task.id
+                        )
+                        impact_area_context = {
+                            "label": input_data.impactArea.name,
+                            "language": input_data.impactArea.language,
+                            "source": "user_provided"
+                        }
+                else:
+                    logger.info(
+                        "Using impact area name directly (no Wikidata ID)",
+                        name=input_data.impactArea.name,
+                        language=input_data.impactArea.language,
+                        correlation_id=task.id
+                    )
+                    impact_area_context = {
+                        "label": input_data.impactArea.name,
+                        "language": input_data.impactArea.language,
+                        "source": "user_provided"
+                    }
 
             enriched_data = {
                 "impact_area": impact_area_context,
                 "topics": topics_context,
-                "personality": personality,
+                "personality": personality_context,
                 "text": input_data.text
             }
 

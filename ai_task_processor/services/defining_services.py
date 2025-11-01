@@ -292,9 +292,10 @@ class DefiningSeverityProvider:
         """
         Build structured prompt for AI to reason about severity
         Includes all Wikidata contextual signals for holistic analysis
+        Falls back to text-only analysis if Wikidata enrichment is unavailable
         """
-        impact_area = enriched_data["impact_area"]
-        topics = enriched_data["topics"]
+        impact_area = enriched_data.get("impact_area")
+        topics = enriched_data.get("topics", [])
         personality = enriched_data.get("personality")
         text = enriched_data.get("text", "")
 
@@ -327,8 +328,9 @@ A claim may have HIGH severity in Brazilian context even with moderate global me
 
 """
 
-        # Impact Area Context
-        prompt += f"""**Impact Area:**
+        # Impact Area Context (if available)
+        if impact_area:
+            prompt += f"""**Impact Area:**
 - Label: {impact_area.get('label', 'Unknown')}
 - Description: {impact_area.get('description', 'N/A')}
 - Sitelinks (global recognition): {impact_area.get('sitelinks', 0)}
@@ -337,16 +339,27 @@ A claim may have HIGH severity in Brazilian context even with moderate global me
 - Pageviews (30-day public interest): {impact_area.get('pageviews', 0)}
 
 """
+        else:
+            prompt += """**Impact Area:**
+- Not available (Wikidata enrichment failed) - Use text content for analysis
 
-        # Topics Context
-        prompt += "**Topics:**\n"
-        for idx, topic in enumerate(topics, 1):
-            prompt += f"""  {idx}. {topic.get('label', 'Unknown')}
+"""
+
+        # Topics Context (if available)
+        if topics:
+            prompt += "**Topics:**\n"
+            for idx, topic in enumerate(topics, 1):
+                prompt += f"""  {idx}. {topic.get('label', 'Unknown')}
      - Description: {topic.get('description', 'N/A')}
      - Sitelinks: {topic.get('sitelinks', 0)}
      - Statements: {topic.get('statements', 0)}
      - Inbound links: {topic.get('inbound_links', 0)}
      - Pageviews: {topic.get('pageviews', 0)}
+
+"""
+        else:
+            prompt += """**Topics:**
+- Not available (Wikidata enrichment failed) - Use text content for analysis
 
 """
 
@@ -362,6 +375,11 @@ A claim may have HIGH severity in Brazilian context even with moderate global me
 - Social followers: {personality.get('followers', 0)}
 - Number of positions held: {len(personality.get('positions', []))}
 - Number of awards: {len(personality.get('awards', []))}
+
+"""
+        else:
+            prompt += """**Personality:**
+- Not identified or Wikidata enrichment not available
 
 """
 
@@ -414,6 +432,7 @@ A claim may have HIGH severity in Brazilian context even with moderate global me
 5. **Impact Area Scope:** Does this affect public safety, democracy, health, or economic stability?
 6. **Public Engagement:** High pageviews indicate active public discussion, raising severity.
 7. **Text Content Analysis:** Read the actual claim - what specific harm could misinformation cause?
+8. **Fallback Analysis:** If Wikidata metrics are unavailable, rely heavily on text content analysis. Consider the subject matter, potential harm, and likely audience reach based on the content itself.
 
 **Brazilian Context Examples:**
 - Brazilian politician with 1M followers spreading election misinformation → HIGH severity (even with moderate global metrics)
