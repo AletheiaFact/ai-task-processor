@@ -296,12 +296,12 @@ class DefiningSeverityProvider:
         """
         impact_area = enriched_data.get("impact_area")
         topics = enriched_data.get("topics", [])
-        personality = enriched_data.get("personality")
+        personalities = enriched_data.get("personalities", [])  # Changed to array
         text = enriched_data.get("text", "")
 
         prompt = """You are a reasoning model for classifying the severity of fact-check verification requests.
 
-Given contextual information about the impact area, topics, personality (if present), and text content,
+Given contextual information about the impact area, topics, personalities (if present), and text content,
 analyze how severe or important this verification is according to these severity levels:
 
 **Severity Levels (from highest to lowest):**
@@ -363,22 +363,23 @@ A claim may have HIGH severity in Brazilian context even with moderate global me
 
 """
 
-        # Personality Context (if exists)
-        if personality:
-            prompt += f"""**Personality:**
-- Name: {personality.get('label', 'Unknown')}
-- Description: {personality.get('description', 'N/A')}
-- Sitelinks: {personality.get('sitelinks', 0)}
-- Statements: {personality.get('statements', 0)}
-- Inbound links: {personality.get('inbound_links', 0)}
-- Pageviews: {personality.get('pageviews', 0)}
-- Social followers: {personality.get('followers', 0)}
-- Number of positions held: {len(personality.get('positions', []))}
-- Number of awards: {len(personality.get('awards', []))}
+        # Personalities Context (if exists - array)
+        if personalities:
+            prompt += "**Personalities:**\n"
+            for idx, personality in enumerate(personalities, 1):
+                prompt += f"""  {idx}. {personality.get('label', 'Unknown')}
+     - Description: {personality.get('description', 'N/A')}
+     - Sitelinks: {personality.get('sitelinks', 0)}
+     - Statements: {personality.get('statements', 0)}
+     - Inbound links: {personality.get('inbound_links', 0)}
+     - Pageviews: {personality.get('pageviews', 0)}
+     - Social followers: {personality.get('followers', 0)}
+     - Number of positions held: {len(personality.get('positions', []))}
+     - Number of awards: {len(personality.get('awards', []))}
 
 """
         else:
-            prompt += """**Personality:**
+            prompt += """**Personalities:**
 - Not identified or Wikidata enrichment not available
 
 """

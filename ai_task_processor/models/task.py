@@ -88,7 +88,7 @@ class DefiningSeverityInput(BaseModel):
     """
     impactArea: Optional[SeverityImpactArea] = None
     topics: List[SeverityTopic] = []
-    personality: Optional[SeverityPersonality] = None
+    personalities: List[SeverityPersonality] = []  # Changed to array
     text: str
     model: str = "o3-mini"
 

@@ -1,4 +1,5 @@
 from typing import Dict, Any
+import asyncio
 from ..models import Task, TaskResult, TaskStatus, TaskType, DefiningSeverityInput
 from ..services.defining_services import defining_severity
 from ..services.wikidata_client import wikidata_client
@@ -65,50 +66,63 @@ class DefiningSeverityProcessor(BaseProcessor):
                 "Processing defining severity task",
                 task_id=task.id,
                 model=input_data.model,
-                has_personality=input_data.personality is not None,
+                personalities_count=len(input_data.personalities),
                 topics_count=len(input_data.topics),
                 has_impact_area=input_data.impactArea is not None
             )
 
-            personality_context = None
-            if input_data.personality:
-                if input_data.personality.wikidataId:
+            async def enrich_personality(personality):
+                """Helper function to enrich a single personality"""
+                if personality.wikidataId:
                     try:
                         logger.info(
                             "Fetching personality data by ID",
-                            wikidata_id=input_data.personality.wikidataId,
-                            name=input_data.personality.name,
+                            wikidata_id=personality.wikidataId,
+                            name=personality.name,
                             correlation_id=task.id
                         )
-                        personality_context = await wikidata_client.get_personality_data(
-                            wikidata_id=input_data.personality.wikidataId,
+                        personality_data = await wikidata_client.get_personality_data(
+                            wikidata_id=personality.wikidataId,
                             correlation_id=task.id
                         )
+                        return personality_data
                     except Exception as e:
                         logger.warning(
                             "Failed to fetch personality data, using provided name",
-                            wikidata_id=input_data.personality.wikidataId,
-                            name=input_data.personality.name,
+                            wikidata_id=personality.wikidataId,
+                            name=personality.name,
                             error=str(e),
                             correlation_id=task.id
                         )
-                        personality_context = {
-                            "label": input_data.personality.name,
+                        return {
+                            "label": personality.name,
                             "source": "user_provided"
                         }
                 else:
                     logger.info(
                         "Using personality name directly (no Wikidata ID)",
-                        name=input_data.personality.name,
+                        name=personality.name,
                         correlation_id=task.id
                     )
-                    personality_context = {
-                        "label": input_data.personality.name,
+                    return {
+                        "label": personality.name,
                         "source": "user_provided"
                     }
 
-            topics_context = []
-            for topic in input_data.topics:
+            if input_data.personalities:
+                logger.info(
+                    "Enriching personalities in parallel",
+                    task_id=task.id,
+                    personalities_count=len(input_data.personalities),
+                    correlation_id=task.id
+                )
+                personalities_tasks = [enrich_personality(p) for p in input_data.personalities]
+                personalities_context = await asyncio.gather(*personalities_tasks)
+            else:
+                personalities_context = []
+
+            async def enrich_topic(topic):
+                """Helper function to enrich a single topic"""
                 if topic.wikidataId:
                     try:
                         logger.info(
@@ -122,7 +136,7 @@ class DefiningSeverityProcessor(BaseProcessor):
                             wikidata_id=topic.wikidataId,
                             correlation_id=task.id
                         )
-                        topics_context.append(topic_data)
+                        return topic_data
                     except Exception as e:
                         logger.warning(
                             "Failed to fetch topic data, using provided name",
@@ -131,11 +145,11 @@ class DefiningSeverityProcessor(BaseProcessor):
                             error=str(e),
                             correlation_id=task.id
                         )
-                        topics_context.append({
+                        return {
                             "label": topic.name,
                             "language": topic.language,
                             "source": "user_provided"
-                        })
+                        }
                 else:
                     logger.info(
                         "Using topic name directly (no Wikidata ID)",
@@ -143,11 +157,23 @@ class DefiningSeverityProcessor(BaseProcessor):
                         language=topic.language,
                         correlation_id=task.id
                     )
-                    topics_context.append({
+                    return {
                         "label": topic.name,
                         "language": topic.language,
                         "source": "user_provided"
-                    })
+                    }
+
+            if input_data.topics:
+                logger.info(
+                    "Enriching topics in parallel",
+                    task_id=task.id,
+                    topics_count=len(input_data.topics),
+                    correlation_id=task.id
+                )
+                topics_tasks = [enrich_topic(t) for t in input_data.topics]
+                topics_context = await asyncio.gather(*topics_tasks)
+            else:
+                topics_context = []
 
             impact_area_context = None
             if input_data.impactArea:
@@ -193,7 +219,7 @@ class DefiningSeverityProcessor(BaseProcessor):
             enriched_data = {
                 "impact_area": impact_area_context,
                 "topics": topics_context,
-                "personality": personality_context,
+                "personalities": personalities_context,
                 "text": input_data.text
             }
 
