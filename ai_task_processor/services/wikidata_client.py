@@ -16,11 +16,21 @@ class WikidataClient:
         self.base_url = "https://www.wikidata.org/w/api.php"
         self.timeout = httpx.Timeout(30.0)
         self._session: Optional[httpx.AsyncClient] = None
+        # Proper headers required by Wikidata API to avoid 403 errors
+        self.headers = {
+            "User-Agent": "AI-Task-Processor/1.0 (https://github.com/AletheiaFact/ai-task-processor) httpx/0.27.0",
+            "Accept": "application/json",
+            "Accept-Language": "pt,en;q=0.9"
+        }
 
     async def _get_session(self) -> httpx.AsyncClient:
-        """Get or create HTTP session"""
+        """Get or create HTTP session with proper headers"""
         if self._session is None or self._session.is_closed:
-            self._session = httpx.AsyncClient(timeout=self.timeout)
+            self._session = httpx.AsyncClient(
+                timeout=self.timeout,
+                headers=self.headers,
+                follow_redirects=True
+            )
         return self._session
 
     async def close(self):
@@ -71,10 +81,20 @@ class WikidataClient:
                 "type": "item"  # Search for items (entities)
             }
 
+            # Add small delay to avoid rate limiting
+            await asyncio.sleep(0.2)
+
             response = await session.get(self.base_url, params=params)
 
             if response.status_code >= 500:
                 raise RetryableError(f"Wikidata server error: {response.status_code}")
+            elif response.status_code == 403:
+                logger.error(
+                    "Wikidata 403 Forbidden - check User-Agent header",
+                    name=name,
+                    correlation_id=correlation_id
+                )
+                raise NonRetryableError(f"Wikidata access forbidden: {response.status_code}")
             elif response.status_code >= 400:
                 raise NonRetryableError(f"Wikidata client error: {response.status_code}")
 
@@ -151,10 +171,19 @@ class WikidataClient:
                 "format": "json"
             }
 
+            await asyncio.sleep(0.2)
+
             response = await session.get(self.base_url, params=params)
 
             if response.status_code >= 500:
                 raise RetryableError(f"Wikidata server error: {response.status_code}")
+            elif response.status_code == 403:
+                logger.error(
+                    "Wikidata 403 Forbidden - check User-Agent header",
+                    entity_id=entity_id,
+                    correlation_id=correlation_id
+                )
+                raise NonRetryableError(f"Wikidata access forbidden: {response.status_code}")
             elif response.status_code >= 400:
                 raise NonRetryableError(f"Wikidata client error: {response.status_code}")
 
