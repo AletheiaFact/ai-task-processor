@@ -99,15 +99,23 @@ class IdentifyingDataProcessor(BaseProcessor):
                         language="en",  # TODO: Make language configurable
                         correlation_id=task.id
                     )
-                    result["personalities"] = enriched_personalities
+
+                    # Filter out personalities without wikidata IDs
+                    filtered_personalities = [
+                        p for p in enriched_personalities
+                        if p.get("wikidata") and p.get("wikidata", {}).get("id")
+                    ]
+                    result["personalities"] = filtered_personalities
 
                     # Log enrichment statistics
-                    enriched_count = sum(1 for p in enriched_personalities if p.get("wikidata"))
+                    enriched_count = len(filtered_personalities)
+                    removed_count = len(enriched_personalities) - enriched_count
                     logger.info(
                         "Wikidata enrichment completed",
                         task_id=task.id,
                         total_personalities=len(enriched_personalities),
                         enriched_count=enriched_count,
+                        removed_without_wikidata=removed_count,
                         correlation_id=task.id
                     )
 
