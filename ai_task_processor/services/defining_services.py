@@ -66,9 +66,15 @@ class DefiningTopicsProvider:
 
         IMPORTANT REQUIREMENTS:
         1. Return topic names in Portuguese (pt-BR)
-        2. Use GENERAL categories that exist in knowledge bases (e.g., "Crime", "Política", "Economia", "Saúde")
+        2. Use GENERAL categories that exist in knowledge bases (e.g., "Crime", "Política", "Economia", "Saúde", "Meio Ambiente")
         3. Avoid overly specific event descriptions
         4. Use single-word or simple 2-word topics when possible
+
+        **COP30 FOCUS:**
+        If text mentions COP30, climate conference in Belém (2025), or UN climate summit in Brazil, return "COP30" as a topic.
+        COP30 exists in Wikidata and must be identified for enrichment.
+
+        Climate topics: Mudanças Climáticas, Meio Ambiente, Sustentabilidade, Aquecimento Global, Desmatamento, Políticas Ambientais
 
         Return the result as a JSON array with the following structure for each topic found:
         [
@@ -305,11 +311,11 @@ Given contextual information about the impact area, topics, personalities (if pr
 analyze how severe or important this verification is according to these severity levels:
 
 **Severity Levels (from highest to lowest):**
-- critical: Extremely urgent, widespread impact, high public safety concern (e.g., public health emergencies, election fraud, national security threats)
-- high_3: Very high severity with significant immediate consequences (e.g., major political scandals, serious misinformation affecting public policy)
-- high_2: High severity with substantial potential impact (e.g., influential figures spreading false health information)
-- high_1: High severity with notable implications (e.g., misinformation about significant social/economic issues)
-- medium_3: Moderate-high severity (e.g., false claims by regional influencers, local policy issues)
+- critical: Extremely urgent, widespread impact, high public safety concern (e.g., public health emergencies, election fraud, national security threats, climate crisis misinformation during COP30)
+- high_3: Very high severity with significant immediate consequences (e.g., major political scandals, serious misinformation affecting public policy, COP30-related false claims with policy implications)
+- high_2: High severity with substantial potential impact (e.g., influential figures spreading false health information, climate misinformation affecting environmental policy)
+- high_1: High severity with notable implications (e.g., misinformation about significant social/economic issues, false environmental data)
+- medium_3: Moderate-high severity (e.g., false claims by regional influencers, local policy issues, environmental claims with moderate reach)
 - medium_2: Moderate severity (e.g., debatable claims with moderate reach)
 - medium_1: Moderate-low severity (e.g., minor factual errors with limited impact)
 - low_3: Low-moderate severity (e.g., entertainment/celebrity rumors with some public interest)
@@ -323,6 +329,14 @@ However, you must evaluate severity considering BOTH:
 2. **Global Relevance:** Does this have international implications or involve globally significant topics?
 
 A claim may have HIGH severity in Brazilian context even with moderate global metrics, and vice versa.
+
+**COP30 PRIORITY (2025):**
+Brazil hosts COP30 in Belém - a globally significant climate event. Elevate severity for COP30-related content:
+- **CRITICAL/HIGH_3**: Undermines negotiations, discredits climate science, false leader statements, misrepresents Brazil's climate data
+- **HIGH_2/HIGH_1**: Misrepresents climate statistics, false renewable energy claims, affects climate policy perception
+- **MEDIUM_3+**: Event logistics, environmental policies, Amazon/deforestation claims
+
+Indicators: COP30 mention, Belém climate context, UN climate summit, Brazil climate policy, Amazon protection
 
 **Context to Analyze:**
 
@@ -435,11 +449,14 @@ A claim may have HIGH severity in Brazilian context even with moderate global me
 7. **Text Content Analysis:** Read the actual claim - what specific harm could misinformation cause?
 8. **Fallback Analysis:** If Wikidata metrics are unavailable, rely heavily on text content analysis. Consider the subject matter, potential harm, and likely audience reach based on the content itself.
 
-**Brazilian Context Examples:**
-- Brazilian politician with 1M followers spreading election misinformation → HIGH severity (even with moderate global metrics)
-- Global warming claim in Brazilian Portuguese about Amazon deforestation → HIGH severity (Brazilian + global relevance)
-- Brazilian celebrity entertainment rumor → LOW-MEDIUM severity (limited real-world impact)
-- Health misinformation from Brazilian doctor/influencer → HIGH severity (public safety risk)
+**Examples:**
+- Brazilian politician election misinformation → HIGH
+- Amazon deforestation claims → HIGH (Brazilian + global)
+- Celebrity rumors → LOW-MEDIUM
+- Health misinformation → HIGH (public safety)
+- COP30 false binding agreements → CRITICAL (undermines negotiations)
+- COP30 false climate data → HIGH_3 (international trust)
+- Climate science denial at COP30 → CRITICAL
 
 **IMPORTANT:** Respond with ONLY ONE of the severity enum values listed above. No explanation, just the enum value.
 
