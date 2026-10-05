@@ -1,10 +1,11 @@
 # AI Task Processor
 
-A service that polls NestJS APIs for AI tasks and processes them using OpenAI, local Ollama models. Features OAuth2 authentication, multi-tier rate limiting.
+A service that polls NestJS APIs for AI tasks and processes them using OpenAI, local Ollama models and Jev (TypeSafe). Features OAuth2 authentication, multi-tier rate limiting.
 
 ## Features
 
 - **Text embeddings** generation using OpenAI API, Ollama (local)
+- **Verification request triage**: personalities, topics, impact area and severity, with impact area and severity on Jev or OpenAI (see [docs/JEV_TRIAGE.md](docs/JEV_TRIAGE.md))
 - **Processing modes**: `openai`, `ollama`, or `hybrid` (Ollama first, OpenAI fallback)
 - **OAuth2 authentication** via Ory Cloud with automatic token refresh
 - **Multi-tier rate limiting** with persistent storage (minute/hour/day/week/month)
@@ -42,6 +43,9 @@ OPENAI_API_KEY=sk-your-key
 
 # Ollama Models (for ollama/hybrid modes)
 SUPPORTED_MODELS=["nomic-embed-text","dengcao/Qwen3-Embedding-0.6B:Q8_0"]
+
+# Jev (TypeSafe API) for impact area and severity tasks with a "jev-*" model
+TYPESAFE_API_KEY=your-typesafe-key
 ```
 
 ### 2. Start Services
@@ -63,6 +67,12 @@ All configuration via environment variables (see `.env.example` for complete lis
 - `PROCESSING_MODE`: `openai`, `ollama`, or `hybrid` (default: `openai`)
 - `OPENAI_API_KEY`: OpenAI API key (**required** for `openai`/`hybrid`, **optional** for `ollama`)
 - `SUPPORTED_MODELS`: JSON array of Ollama models for `ollama`/`hybrid` modes (default: `["nomic-embed-text","dengcao/Qwen3-Embedding-0.6B:Q8_0"]`)
+
+**Jev (impact area and severity):**
+- `TYPESAFE_API_KEY`: TypeSafe API key, used when a task's model starts with `jev`
+- `JEV_FALLBACK_MODEL`: OpenAI model used when Jev fails with a temporary error (default: `o3`)
+- `JEV_FALLBACK_MAX_PER_DAY`: daily cap on OpenAI fallbacks; `0` disables the fallback (default: `50`)
+- See [docs/JEV_TRIAGE.md](docs/JEV_TRIAGE.md) for all Jev settings
 
 **Rate Limiting:**
 - `RATE_LIMIT_ENABLED`: Enable rate limiting (default: `true`)
@@ -115,7 +125,7 @@ Integrates with NestJS APIs via OAuth2-protected endpoints:
 **Switch modes:** Edit `PROCESSING_MODE` in `.env` and run `docker-compose restart ai-task-processor`
 
 
-**Mock Processing:** Use `OPENAI_API_KEY=your_openai_api_key_here` (placeholder) to enable mock embeddings for testing without API costs.
+**Mock Processing:** Use `OPENAI_API_KEY=your_openai_api_key_here` (placeholder) to enable mock OpenAI results, and `TYPESAFE_API_KEY=your_typesafe_api_key_here` to enable mock Jev answers, for testing without API costs.
 
 ## Extending the System
 
