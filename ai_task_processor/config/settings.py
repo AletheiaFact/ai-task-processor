@@ -44,6 +44,15 @@ class Settings(BaseSettings):
         env="SUPPORTED_MODELS",
         description="List of Ollama models to install and support (config-driven)"
     )
+
+    # TypeSafe API configuration for Jev (impact area and severity triage)
+    typesafe_api_key: Optional[str] = Field(None, env="TYPESAFE_API_KEY")
+    jev_base_url: Optional[str] = Field(None, env="JEV_BASE_URL")
+    jev_timeout: int = Field(30, env="JEV_TIMEOUT")
+    # TODO: revisit together with the fallback to OpenAI (retry budget before falling back)
+    jev_backoff_seconds: List[float] = Field([5, 10, 20, 40, 60], env="JEV_BACKOFF_SECONDS")
+    jev_fallback_model: str = Field("o3", env="JEV_FALLBACK_MODEL")
+    jev_fallback_max_per_day: int = Field(50, env="JEV_FALLBACK_MAX_PER_DAY")
     
     # Ory Cloud OAuth2 Configuration
     ory_project_slug: str = Field(..., env="ORY_PROJECT_SLUG")

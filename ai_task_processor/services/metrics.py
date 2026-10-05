@@ -55,6 +55,24 @@ ollama_tokens_used = Counter(
     ['model', 'type']
 )
 
+jev_requests_total = Counter(
+    'jev_requests_total',
+    'Total number of Jev API requests',
+    ['model', 'status']
+)
+
+jev_tokens_used = Counter(
+    'jev_tokens_used_total',
+    'Total number of Jev tokens used',
+    ['model', 'type']
+)
+
+triage_provider_total = Counter(
+    'triage_provider_total',
+    'Which provider resolved each Jev-routed triage task (jev, openai_fallback, fallback_limit_reached, jev_error)',
+    ['task_type', 'provider']
+)
+
 circuit_breaker_state = Gauge(
     'circuit_breaker_state',
     'Circuit breaker state (0=closed, 1=open, 2=half-open)',
@@ -140,6 +158,20 @@ class MetricsCollector:
                     type=token_type
                 ).inc(count)
     
+    def record_jev_request(self, model: str, status: str, usage: Dict[str, Any] = None):
+        jev_requests_total.labels(model=model, status=status).inc()
+
+        if usage:
+            for token_type, count in usage.items():
+                if count:
+                    jev_tokens_used.labels(
+                        model=model,
+                        type=token_type
+                    ).inc(count)
+
+    def record_triage_provider(self, task_type: str, provider: str):
+        triage_provider_total.labels(task_type=task_type, provider=provider).inc()
+
     def set_circuit_breaker_state(self, service: str, state: int):
         circuit_breaker_state.labels(service=service).set(state)
     

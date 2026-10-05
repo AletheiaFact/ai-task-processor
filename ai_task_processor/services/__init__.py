@@ -7,6 +7,7 @@ from .defining_services import defining_topics, defining_impact_area, defining_s
 from .metrics import metrics
 from .rate_limiter import rate_limiter
 from .wikidata_client import wikidata_client
+from .jev_client import jev_client
 
 __all__ = [
     "APIClient",
@@ -19,5 +20,6 @@ __all__ = [
     "defining_severity",
     "metrics",
     "rate_limiter",
-    "wikidata_client"
+    "wikidata_client",
+    "jev_client"
 ]
