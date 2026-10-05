@@ -59,7 +59,7 @@ class DefiningSeverityProcessor(BaseProcessor):
             if not defining_severity.supports_model(input_data.model):
                 raise ValueError(
                     f"Requested model '{input_data.model}' is not supported. "
-                    f"Supported models: OpenAI models"
+                    f"Supported models: Jev and OpenAI models"
                 )
 
             logger.info(

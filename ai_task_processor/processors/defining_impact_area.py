@@ -130,7 +130,8 @@ class DefiningImpactAreaProcessor(BaseProcessor):
             result = await defining_impact_area.define_impact_areas(
                 text=input_data.text,
                 model=input_data.model,
-                correlation_id=task.id
+                correlation_id=task.id,
+                options=input_data.options
             )
 
             logger.info(
