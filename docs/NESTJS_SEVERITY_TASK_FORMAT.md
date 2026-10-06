@@ -13,7 +13,7 @@
     "topicsWikidataIds": string[],
     "personalityWikidataId": string | null,
     "text": string,
-    "model": string  // Default: "gpt-4o-mini"
+    "model": string  // OpenAI model (e.g. "o3") or Jev model (e.g. "jev-1.13.0")
   },
   "callbackRoute": "verification_update_defining_severity",
   "callbackParams": {
@@ -45,8 +45,8 @@ async createSeverityTask(verificationRequest: VerificationRequest) {
       // Required: Text content being fact-checked
       text: verificationRequest.content,
 
-      // Optional: AI model to use (defaults to "gpt-4o-mini" if not provided)
-      model: "gpt-4o-mini"  // or "gpt-4o", "gpt-4-turbo", etc.
+      // AI model to use: an OpenAI model, or a Jev model ("jev-*", see docs/JEV_TRIAGE.md)
+      model: "jev-1.13.0"  // or "o3", "gpt-4o", etc.
     },
     callbackRoute: 'verification_update_defining_severity',
     callbackParams: {
@@ -69,7 +69,7 @@ async createSeverityTask(verificationRequest: VerificationRequest) {
 | `topicsWikidataIds` | string[] | ✅ | Wikidata IDs from defining_topics task | `["Q7942", "Q12739"]` |
 | `personalityWikidataId` | string \| null | ❌ | Wikidata ID from identifying_data task | `"Q22571744"` (Greta Thunberg) |
 | `text` | string | ✅ | Text content being fact-checked | `"Statement about climate action"` |
-| `model` | string | ❌ | OpenAI model for reasoning | `"gpt-4o-mini"` (default) |
+| `model` | string | ✅ | OpenAI model, or a Jev model starting with `jev` (see [JEV_TRIAGE.md](JEV_TRIAGE.md)) | `"jev-1.13.0"`, `"o3"` |
 
 **Note:** The `targetId` in `callbackParams` contains the Verification Request ID, so no need to duplicate it in `content`.
 

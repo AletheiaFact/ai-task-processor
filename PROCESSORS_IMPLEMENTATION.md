@@ -102,62 +102,26 @@ Identifies the areas of impact discussed or implied in a given text.
 class DefiningImpactAreaInput(BaseModel):
     text: str
     model: str = "o3-mini"
+    options: List[str] = []  # closed list of impact area names sent by the backend
 ```
 
-### Output Model
-```python
-class ImpactArea(BaseModel):
-    name: str  # Impact area name
-    description: str  # Description of the impact
-    confidence: float  # Confidence score (0-1)
-    wikidata: Optional[WikidataEntity] = None
-
-class DefiningImpactAreaOutput(BaseModel):
-    impact_areas: List[ImpactArea]
-    model: str
-    usage: Dict[str, int]
-```
-
-### Example Output
+### Output
+The task result sent in the callback:
 ```json
 {
-  "impact_areas": [
-    {
-      "name": "Social Impact",
-      "description": "Affects social structures and relationships",
-      "confidence": 0.90,
-      "wikidata": {
-        "id": "Q8425",
-        "url": "https://www.wikidata.org/wiki/Q8425",
-        "label": "society",
-        "description": "group of individuals living together in organized communities",
-        "aliases": ["social", "societal"]
-      }
-    },
-    {
-      "name": "Economic Impact",
-      "description": "Influences economic conditions and markets",
-      "confidence": 0.85,
-      "wikidata": {
-        "id": "Q8134",
-        "url": "https://www.wikidata.org/wiki/Q8134",
-        "label": "economics",
-        "description": "social science of resource allocation",
-        "aliases": ["economic science"]
-      }
-    }
-  ],
-  "model": "o3-mini",
-  "usage": {"prompt_tokens": 50, "total_tokens": 50}
+  "name": "Saúde",
+  "description": "",
+  "wikidataId": "Q12147",
+  "language": "pt"
 }
 ```
 
-### AI Prompt
-The OpenAI model receives a prompt asking it to:
-- Identify main impact areas
-- Describe each impact
-- Provide confidence scores
-- Return structured JSON
+### Model Routing
+- **Jev** (`model` starts with `jev`, e.g. `jev-1.13.0`): one choice question over
+  `options`, with the VR text only. Requires `options`. `description` is empty.
+- **OpenAI** (any other model): prompt asking for the primary impact area as JSON. When
+  `options` are sent, the name must be exactly one of them.
+- Temporary Jev errors fall back to OpenAI with a daily cap. See [docs/JEV_TRIAGE.md](docs/JEV_TRIAGE.md).
 
 ### Wikidata Enrichment
 - Each impact area name is searched in Wikidata
@@ -166,6 +130,7 @@ The OpenAI model receives a prompt asking it to:
 
 ### Files
 - **Service**: `ai_task_processor/services/defining_services.py` (`DefiningImpactAreaProvider`)
+- **Jev**: `ai_task_processor/services/jev_client.py`, `jev_rubric.py`, `jev_fallback.py`
 - **Processor**: `ai_task_processor/processors/defining_impact_area.py`
 - **Models**: `ai_task_processor/models/task.py` (`DefiningImpactAreaInput`, `ImpactArea`, `DefiningImpactAreaOutput`)
 
@@ -185,72 +150,38 @@ Assesses the severity level of issues, events, or situations described in text.
 ### Input Model
 ```python
 class DefiningSeverityInput(BaseModel):
+    impactArea: Optional[SeverityImpactArea] = None  # name, language, wikidataId
+    topics: List[SeverityTopic] = []                 # name, language, wikidataId
+    personalities: List[SeverityPersonality] = []    # name, wikidataId
     text: str
     model: str = "o3-mini"
 ```
 
-### Output Model
-```python
-class Severity(BaseModel):
-    level: str  # "low", "medium", "high", "critical"
-    score: float  # Numerical score (0-10)
-    reasoning: str  # Explanation
-    factors: List[str]  # Contributing factors
-    wikidata: Optional[WikidataEntity] = None
-
-class DefiningSeverityOutput(BaseModel):
-    severity: Severity
-    model: str
-    usage: Dict[str, int]
-```
-
-### Example Output
+### Output
+The task result sent in the callback is one `SeverityEnum` value:
 ```json
-{
-  "severity": {
-    "level": "high",
-    "score": 7.2,
-    "reasoning": "The text describes serious political tensions with potential for escalation",
-    "factors": [
-      "Political instability",
-      "Economic crisis",
-      "Social unrest",
-      "International pressure"
-    ],
-    "wikidata": {
-      "id": "Q6527775",
-      "url": "https://www.wikidata.org/wiki/Q6527775",
-      "label": "severity",
-      "description": "extent of harm or damage",
-      "aliases": ["seriousness", "gravity"]
-    }
-  },
-  "model": "o3-mini",
-  "usage": {"prompt_tokens": 50, "total_tokens": 50}
-}
+{ "severity": "high_2" }
 ```
 
 ### Severity Scale
-- **low (0-2.5)**: Minor issues with limited impact
-- **medium (2.5-5)**: Moderate issues requiring attention
-- **high (5-7.5)**: Serious issues with significant impact
-- **critical (7.5-10)**: Severe issues requiring immediate action
+`low_1`, `low_2`, `low_3`, `medium_1`, `medium_2`, `medium_3`, `high_1`, `high_2`, `high_3`, `critical`
 
-### AI Prompt
-The OpenAI model receives a prompt asking it to:
-- Assess severity level (low/medium/high/critical)
-- Provide numerical score (0-10)
-- Explain the reasoning
-- List key contributing factors
-- Return structured JSON
+### Model Routing
+- **Jev** (`model` starts with `jev`, e.g. `jev-1.13.0`): Jev answers harm, contestable and
+  checkable about the VR text only; the fixed rubric in `services/jev_rubric.py` turns the
+  answers and the personalities' reach into the severity.
+- **OpenAI** (any other model): reasoning prompt with the text and the Wikidata context of the
+  impact area, topics and personalities.
+- Temporary Jev errors fall back to OpenAI with a daily cap. See [docs/JEV_TRIAGE.md](docs/JEV_TRIAGE.md).
 
 ### Wikidata Enrichment
-- Searches for severity classification concepts
-- Enriches with standardized definitions
-- Helps maintain consistency across assessments
+- Fetches Wikidata data for the impact area, topics and personalities (sitelinks, pageviews,
+  followers, positions held)
+- Feeds the OpenAI prompt and, on Jev, the reach matrix
 
 ### Files
 - **Service**: `ai_task_processor/services/defining_services.py` (`DefiningSeverityProvider`)
+- **Jev**: `ai_task_processor/services/jev_client.py`, `jev_rubric.py`, `jev_fallback.py`
 - **Processor**: `ai_task_processor/processors/defining_severity.py`
 - **Models**: `ai_task_processor/models/task.py` (`DefiningSeverityInput`, `Severity`, `DefiningSeverityOutput`)
 
@@ -292,6 +223,9 @@ When `OPENAI_API_KEY=your_openai_api_key_here`:
 - Generates realistic mock data
 - Allows full end-to-end testing
 - No API costs
+
+When `TYPESAFE_API_KEY=your_typesafe_api_key_here`, tasks routed to Jev get mock Jev answers
+in the real format, so the rubric and callbacks run for real.
 
 ---
 
@@ -342,6 +276,10 @@ ai_task_processing_duration_seconds{task_type="defining_topics"}
 # OpenAI usage
 openai_requests_total{model="o3-mini", status="success"}
 openai_tokens_used_total{model="o3-mini", type="prompt_tokens"}
+
+# Jev usage and the provider that resolved each Jev-routed task
+jev_requests_total{model="jev-1.13.0", status="success"}
+triage_provider_total{task_type="defining_severity", provider="jev"}
 ```
 
 ### Logs
@@ -366,7 +304,12 @@ Structured logs with correlation IDs:
 ```bash
 # AI Processing
 OPENAI_API_KEY=your_api_key_here
-PROCESSING_MODE=openai  # Only OpenAI supported for these tasks
+PROCESSING_MODE=openai
+
+# Jev (impact area and severity tasks with a "jev-*" model)
+TYPESAFE_API_KEY=your_typesafe_api_key_here
+JEV_FALLBACK_MODEL=o3
+JEV_FALLBACK_MAX_PER_DAY=50
 
 # Models (if using different models)
 SUPPORTED_MODELS=["o3-mini", "gpt-4"]
@@ -388,8 +331,11 @@ export OPENAI_API_KEY="your_openai_api_key_here"
 
 # Processors will return realistic mock data
 # - Topics: Politics, Economy
-# - Impact Areas: Social Impact, Economic Impact
-# - Severity: medium level with mock factors
+# - Impact Area: the first of content.options ("Social Impact" without options)
+# - Severity: medium_2
+
+# Set the Jev placeholder key for mock Jev answers (impact area and severity with a "jev-*" model)
+export TYPESAFE_API_KEY="your_typesafe_api_key_here"
 ```
 
 ### Integration Testing

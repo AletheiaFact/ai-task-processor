@@ -202,6 +202,15 @@ Routes tasks to appropriate processors:
 - Returns structured personality data
 - Future: Wikidata integration (see TODO in code)
 
+#### Impact Area and Severity Processors (`defining_impact_area.py`, `defining_severity.py`)
+- Route by `content.model`: a model starting with `jev` (e.g. `jev-1.13.0`) goes to Jev
+  through the TypeSafe API (`services/jev_client.py`); any other model goes to OpenAI
+- Impact area on Jev: one choice question over `content.options`, the closed list of areas
+- Severity on Jev: harm, contestable and checkable questions about the VR text, turned into a
+  `SeverityEnum` value by the fixed rubric in `services/jev_rubric.py`
+- Temporary Jev errors fall back to OpenAI with a daily cap (`services/jev_fallback.py`)
+- Details: [docs/JEV_TRIAGE.md](docs/JEV_TRIAGE.md)
+
 ---
 
 ### 5. Authentication System (`services/ory_auth.py`)
@@ -514,6 +523,11 @@ When `OPENAI_API_KEY=your_openai_api_key_here` (placeholder value):
 - Full end-to-end testing without costs
 - Mock data marked in logs
 
+When `TYPESAFE_API_KEY=your_typesafe_api_key_here` (placeholder value):
+- Jev client returns mock answers in the real format, deterministic per text
+- Results are logged as a warning and reported with `model: "jev-mock"`
+- An empty key fails the task instead, so production never stores mock results
+
 ---
 
 ## Authentication & Security
@@ -677,6 +691,14 @@ openai_tokens_used_total{model="text-embedding-3-small", type="prompt_tokens"}
 # Ollama requests
 ollama_requests_total{model="nomic-embed-text", status="success"}
 ollama_tokens_used_total{model="nomic-embed-text", type="prompt_tokens"}
+
+# Jev requests (status: success, retry, retries_exhausted, error, mock)
+jev_requests_total{model="jev-1.13.0", status="success"}
+jev_tokens_used_total{model="jev-1.13.0", type="input_tokens"}
+
+# Provider that resolved each Jev-routed triage task
+# (provider: jev, openai_fallback, fallback_limit_reached, jev_error)
+triage_provider_total{task_type="defining_severity", provider="jev"}
 ```
 
 #### Rate Limiting Metrics
@@ -1119,6 +1141,13 @@ SUPPORTED_MODELS=["nomic-embed-text"]
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_TIMEOUT=120
 OLLAMA_MODEL_DOWNLOAD_TIMEOUT=600
+
+# Jev Configuration (impact area and severity tasks with a "jev-*" model)
+TYPESAFE_API_KEY=your_typesafe_api_key_here  # placeholder = mock answers
+JEV_TIMEOUT=30
+JEV_BACKOFF_SECONDS=[5,10,20,40,60]
+JEV_FALLBACK_MODEL=o3
+JEV_FALLBACK_MAX_PER_DAY=50  # 0 disables the OpenAI fallback
 
 # Rate Limiting
 RATE_LIMIT_ENABLED=true

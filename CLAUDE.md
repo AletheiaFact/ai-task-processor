@@ -77,6 +77,9 @@ Before running, configure these required environment variables in `.env`:
 **OpenAI (Optional):**
 - `OPENAI_API_KEY`: OpenAI API key (leave as placeholder to use mock processing)
 
+**Jev (Optional):**
+- `TYPESAFE_API_KEY`: TypeSafe API key for impact area and severity tasks routed to Jev (`your_typesafe_api_key_here` uses mock answers)
+
 ### Rate Limiting Examples
 **Example 1: Burst Protection with Daily Limits**
 ```bash
@@ -110,14 +113,14 @@ The Docker Compose setup includes comprehensive monitoring:
 
 ## Architecture Overview
 
-This is an **AI Task Processor** service that polls an external NestJS API for AI tasks, processes them using OpenAI (or mock processing), and reports results back. The architecture follows a **producer-consumer pattern** with these key components:
+This is an **AI Task Processor** service that polls an external NestJS API for AI tasks, processes them using OpenAI, Ollama, Jev (or mock processing), and reports results back. The architecture follows a **producer-consumer pattern** with these key components:
 
 ### Core Flow
 1. **OAuth2 Authentication** - Authenticates with Ory Cloud using client credentials flow
 2. **TaskScheduler** - Polls `/api/ai-tasks/pending` every 30 seconds with Bearer token
 3. **RateLimiter** - Checks multi-tier limits before processing (minute/hour/day/week/month)
 4. **ProcessorFactory** - Routes tasks to appropriate processors based on task type
-5. **Processors** - Execute AI operations (text embeddings via OpenAI, Ollama, or mock data)
+5. **Processors** - Execute AI operations (text embeddings via OpenAI or Ollama; triage via OpenAI or Jev; or mock data)
 6. **APIClient** - Updates task status via PATCH `/api/ai-tasks/:id` with results
 7. **MetricsServer** - Exposes Prometheus metrics at `:8001/metrics`
 
@@ -137,6 +140,8 @@ This is an **AI Task Processor** service that polls an external NestJS API for A
 - Generates realistic embedding vectors for testing
 - Supports flexible content formats (string or dictionary)
 - Full end-to-end testing without API costs
+
+**Jev Triage**: `defining_impact_area` and `defining_severity` tasks whose `content.model` starts with `jev` go to Jev (`services/jev_client.py`); any other model uses OpenAI. Jev answers typed questions about the VR text only, and `services/jev_rubric.py` turns the severity answers into a `SeverityEnum` value. Temporary Jev errors fall back to OpenAI with a daily cap (`services/jev_fallback.py`). See `docs/JEV_TRIAGE.md`.
 
 **Circuit Breaker**: `APIClient` includes circuit breaker logic to handle API failures gracefully - switches to "open" state after 5 consecutive failures, then "half-open" for recovery testing.
 
@@ -172,6 +177,14 @@ All configuration via environment variables through Pydantic Settings in `config
 - `OPENAI_API_KEY`: OpenAI API key (use placeholder for mock processing)
 - `PROCESSING_MODE`: AI processing mode - "openai", "ollama", or "hybrid" (default: "openai")
 
+**Jev Configuration (impact area and severity):**
+- `TYPESAFE_API_KEY`: TypeSafe API key (placeholder uses mock answers; empty fails the tasks)
+- `JEV_BASE_URL`: Overrides the TypeSafe API URL (default: "https://api.typesafe.ai")
+- `JEV_TIMEOUT`: Request timeout (default: 30 seconds)
+- `JEV_BACKOFF_SECONDS`: Waits between retries on 429/5xx/timeout (default: [5, 10, 20, 40, 60])
+- `JEV_FALLBACK_MODEL`: OpenAI model used when Jev fails with a temporary error (default: "o3")
+- `JEV_FALLBACK_MAX_PER_DAY`: Daily cap on OpenAI fallbacks, UTC (default: 50, 0 = disabled)
+
 **Ollama Configuration (when using local LLM processing):**
 - `OLLAMA_BASE_URL`: Ollama server URL (default: "http://localhost:11434")
 - `OLLAMA_TIMEOUT`: Request timeout for Ollama operations (default: 120 seconds)
@@ -203,6 +216,7 @@ All configuration via environment variables through Pydantic Settings in `config
 - OAuth2 authentication metrics (token generation, failures)
 - OpenAI usage tracking (tokens by model/type)
 - Ollama usage tracking (requests by model/status, estimated tokens)
+- Jev usage tracking (requests by model/status, tokens) and which provider resolved each triage task (`triage_provider_total`)
 - Circuit breaker state monitoring
 - Multi-tier rate limiting metrics (current usage, limits, exceeded events by time period)
 
@@ -241,13 +255,15 @@ The service integrates with a NestJS API that expects specific task and response
   _id: string,
   type: "text_embedding" | "identifying_data" | "defining_topics" | "defining_impact_area" | "defining_severity",
   state: "pending" | "in_progress" | "succeeded" | "failed",
-  content: string | { text: string, model?: string },
+  content: string | { text: string, model?: string, options?: string[] },  // options: closed impact area list
   callbackRoute: "verification_update_embedding" | "verification_update_identifying_data" | "verification_update_defining_topics" | "verification_update_defining_impact_area" | "verification_update_defining_severity",
   callbackParams: { targetId: string, field: string },
   createdAt: Date,
   updatedAt?: Date
 }
 ```
+
+For `defining_impact_area` and `defining_severity`, a `model` starting with `jev` (e.g. `"jev-1.13.0"`) routes the task to Jev; any other model (e.g. `"o3"`) uses OpenAI.
 
 **Update Response Format:**
 ```typescript

@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from ..config import settings
 from ..utils import get_logger, RetryableError, NonRetryableError
 from .openai_client import openai_client
+from .jev_client import jev_client, is_jev_model
+from .jev_fallback import with_openai_fallback
+from . import jev_rubric
 
 logger = get_logger(__name__)
 
@@ -140,8 +143,25 @@ class DefiningImpactAreaProvider:
     def supports_model(self, model: str) -> bool:
         return True
 
-    async def define_impact_areas(self, text: str, model: str, correlation_id: str = None) -> Dict[str, Any]:
-        """Define impact area from the given text using OpenAI"""
+    async def define_impact_areas(
+        self,
+        text: str,
+        model: str,
+        correlation_id: str = None,
+        options: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """Define impact area from the given text using Jev or OpenAI"""
+
+        if is_jev_model(model):
+            # On a temporary Jev error, falls back to the OpenAI path below (capped per day)
+            return await with_openai_fallback(
+                task_type="defining_impact_area",
+                jev_call=lambda: self._define_impact_area_with_jev(text, model, options or [], correlation_id),
+                openai_call=lambda fallback_model: self.define_impact_areas(
+                    text, fallback_model, correlation_id, options
+                ),
+                correlation_id=correlation_id
+            )
 
         if settings.openai_api_key == "your_openai_api_key_here":
             logger.info(
@@ -149,9 +169,9 @@ class DefiningImpactAreaProvider:
                 model=model,
                 correlation_id=correlation_id
             )
-            return self._mock_impact_areas(text)
+            return self._mock_impact_areas(text, options)
 
-        impact_area = await self._identify_impact_areas_with_openai(text, model, correlation_id)
+        impact_area = await self._identify_impact_areas_with_openai(text, model, correlation_id, options)
 
         return {
             "impact_area": impact_area,
@@ -159,10 +179,55 @@ class DefiningImpactAreaProvider:
             "usage": {"prompt_tokens": len(text.split()), "total_tokens": len(text.split())}
         }
 
-    def _mock_impact_areas(self, text: str) -> Dict[str, Any]:
+    async def _define_impact_area_with_jev(
+        self,
+        text: str,
+        model: str,
+        options: List[str],
+        correlation_id: str = None
+    ) -> Dict[str, Any]:
+        """Jev picks one impact area from the closed list sent by the backend (content.options)"""
+        if not options:
+            raise NonRetryableError("Jev impact area needs the closed list of areas in content.options")
+
+        response = await jev_client.evaluate(
+            state=jev_rubric.text_state(text),
+            questions=jev_rubric.impact_area_questions(options),
+            model=model,
+            correlation_id=correlation_id
+        )
+        answer = response["answers"]["impact_area"]
+
+        if answer["choice"] not in options:
+            logger.warning(
+                "Jev answered an impact area outside the options",
+                choice=answer["choice"],
+                correlation_id=correlation_id
+            )
+
+        logger.info(
+            "Jev classified impact area",
+            model=response["model"],
+            impact_area=answer["choice"],
+            confidence=answer["confidence"],
+            truncated=len(text) > jev_rubric.MAX_TEXT_CHARS,
+            correlation_id=correlation_id
+        )
+
+        return {
+            "impact_area": {
+                "name": answer["choice"],
+                "description": "",
+                "confidence": answer["confidence"],
+            },
+            "model": response["model"],
+            "usage": response["usage"]
+        }
+
+    def _mock_impact_areas(self, text: str, options: Optional[List[str]] = None) -> Dict[str, Any]:
         """Mock impact area identification for testing"""
         mock_impact_area = {
-            "name": "Social Impact",
+            "name": options[0] if options else "Social Impact",
             "description": "Affects social structures and relationships",
             "confidence": 0.90
         }
@@ -176,12 +241,27 @@ class DefiningImpactAreaProvider:
     # TODO: at place using a text to identify the impact area
     # we need request the wikidata to fetch possible impact area related with personality
     # then we need abstract the VR context informations to identify the impact area also
-    async def _identify_impact_areas_with_openai(self, text: str, model: str, correlation_id: str = None) -> Dict[str, Any]:
+    async def _identify_impact_areas_with_openai(
+        self,
+        text: str,
+        model: str,
+        correlation_id: str = None,
+        options: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         """Use OpenAI to identify the primary impact area in the text"""
+        options_rule = ""
+        if options:
+            names = "\n".join(f"        - {option}" for option in options)
+            options_rule = f"""
+        The "name" field MUST be EXACTLY one of these names, copied as written:
+{names}
+        Use "Outros" only if none of the other names applies.
+"""
+
         prompt = f"""
         Analyze the following text and identify the PRIMARY impact area.
         IMPORTANT: Return the impact area name and description in Portuguese (pt-BR).
-
+{options_rule}
         Return the result as a JSON object with the following structure:
         {{
             "name": "Impact area name in Portuguese",
@@ -241,7 +321,7 @@ class DefiningSeverityProvider:
     """Provider for defining severity with AI reasoning"""
 
     def supports_model(self, model: str) -> bool:
-        """Check if model is supported - accepts any OpenAI model"""
+        """Check if model is supported - accepts Jev models and any OpenAI model"""
         return True
 
     async def define_severity(
@@ -259,12 +339,23 @@ class DefiningSeverityProvider:
                 - topics: List of Wikidata-enriched topic data
                 - personality: Optional Wikidata-enriched personality data
                 - text: Text content being verified
-            model: OpenAI model to use for reasoning
+            model: Jev model (e.g. "jev-1.13.0") or OpenAI model to use for reasoning
             correlation_id: Correlation ID for tracking
 
         Returns:
             Dictionary with severity classification result
         """
+        if is_jev_model(model):
+            # On a temporary Jev error, falls back to the o3 prompt below (capped per day)
+            return await with_openai_fallback(
+                task_type="defining_severity",
+                jev_call=lambda: self._define_severity_with_jev(enriched_data, model, correlation_id),
+                openai_call=lambda fallback_model: self.define_severity(
+                    enriched_data, fallback_model, correlation_id
+                ),
+                correlation_id=correlation_id
+            )
+
         # Check if using mock mode
         if settings.openai_api_key == "your_openai_api_key_here":
             logger.info(
@@ -284,6 +375,45 @@ class DefiningSeverityProvider:
             "severity": severity_enum,
             "model": model,
             "usage": {"model_used": model}
+        }
+
+    async def _define_severity_with_jev(
+        self,
+        enriched_data: Dict[str, Any],
+        model: str,
+        correlation_id: str = None
+    ) -> Dict[str, Any]:
+        """
+        Jev answers harm, contestable and checkable about the text only;
+        the fixed matrices in jev_rubric turn that and the personalities' reach into
+        the severity
+        """
+        text = enriched_data.get("text", "")
+        response = await jev_client.evaluate(
+            state=jev_rubric.text_state(text),
+            questions=jev_rubric.severity_questions(),
+            model=model,
+            correlation_id=correlation_id
+        )
+
+        rubric_result = jev_rubric.compute_severity(
+            response["answers"],
+            personalities=enriched_data.get("personalities", [])
+        )
+
+        logger.info(
+            "Jev classified severity",
+            model=response["model"],
+            truncated=len(text) > jev_rubric.MAX_TEXT_CHARS,
+            correlation_id=correlation_id,
+            **rubric_result
+        )
+
+        return {
+            "severity": rubric_result["severity"],
+            "model": response["model"],
+            "usage": response["usage"],
+            "rubric": rubric_result
         }
 
     def _mock_severity(self, enriched_data: Dict[str, Any]) -> Dict[str, Any]:

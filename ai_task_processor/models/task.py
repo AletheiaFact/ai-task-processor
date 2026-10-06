@@ -63,6 +63,8 @@ class DefiningTopicsInput(BaseModel):
 class DefiningImpactAreaInput(BaseModel):
     text: str
     model: str = "o3-mini"
+    # TODO: the names come only in Portuguese (tech debt also tracked in aletheia)
+    options: List[str] = []
 
 class SeverityImpactArea(BaseModel):
     """Impact area information for severity assessment"""
