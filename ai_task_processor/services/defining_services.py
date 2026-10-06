@@ -384,7 +384,7 @@ class DefiningSeverityProvider:
         correlation_id: str = None
     ) -> Dict[str, Any]:
         """
-        Jev answers harm, contestable and checkable about the text only (rubric v3);
+        Jev answers harm, contestable and checkable about the text only;
         the fixed matrices in jev_rubric turn that and the personalities' reach into
         the severity
         """

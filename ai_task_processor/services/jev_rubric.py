@@ -1,12 +1,11 @@
-"""Jev questions for triage: impact area, and the severity rubric ported from
-jev-feasibility/regua_v3/rubric.json.
+"""Jev questions for triage: impact area, and the severity rubric.
 
 Jev answers three questions about the VR text only (harm, contestable, checkable).
 Everything after that is fixed, auditable code:
 
-1. v3 matrix: no checkable claim -> Baixa; otherwise harm x contestable
+1. priority matrix: no checkable claim -> Low; otherwise harm x contestable
 2. reach matrix: adjusts the band from the personalities' Wikidata data
-3. the band is limited to Baixa..Crítica
+3. the band is limited to Low..Critical
 4. the sub-band (_1, _2, _3) comes from where Jev's expected harm score falls
    within its most likely level
 
@@ -14,52 +13,52 @@ Any change to the questions, the matrices or the thresholds must bump RUBRIC_VER
 """
 from typing import Any, Dict, List, Optional
 
-RUBRIC_VERSION = 3
+RUBRIC_VERSION = 1
 
 # Long texts are truncated before going to Jev
 MAX_TEXT_CHARS = 6000
 
-BAIXA, MEDIA, ALTA, CRITICA = 0, 1, 2, 3
-LEVEL_NAMES = ["Baixa", "Média", "Alta", "Crítica"]
+LOW, MEDIUM, HIGH, CRITICAL = 0, 1, 2, 3
+LEVEL_NAMES = ["Low", "Medium", "High", "Critical"]
 
 HARM_INSTRUCTIONS = (
-    "Você é triador de uma agência de checagem de fatos brasileira. Avalie apenas o DANO: "
-    "se o que este conteúdo afirma fosse falso, ou se uma versão falsa dele se espalhasse, "
-    "qual seria o dano no mundo real? Considere risco físico (saúde pública, populações "
-    "vulneráveis, evacuação, pânico), escala (desastre ambiental, fraude milionária, crise "
-    "institucional) e alcance. Não leve em conta a fonte nem se a informação parece "
-    "verdadeira: isso é avaliado em outra pergunta."
+    "You are a triage analyst at a Brazilian fact-checking agency. Assess only the HARM: "
+    "if what this content claims were false, or if a false version of it spread, what "
+    "would the real-world harm be? Consider physical risk (public health, vulnerable "
+    "populations, evacuation, panic), scale (environmental disaster, multi-million fraud, "
+    "institutional crisis) and reach. Do not take into account the source or whether the "
+    "information seems true: that is assessed in another question."
 )
 
 HARM_LEVELS = [
-    "Baixa: dano pequeno ou nenhum (entretenimento, receita, serviço, rotina administrativa local)",
-    "Média: dano limitado a um grupo ou local, reversível (projeto de lei, taxa municipal, disputa política local)",
-    "Alta: dano amplo ou difícil de reverter (fraude milionária, desastre ambiental, crise institucional, reputação de pessoas públicas)",
-    "Crítica: risco à vida ou à saúde de muitas pessoas, ou ao processo eleitoral (alerta sanitário, evacuação, desastre em curso, pânico)",
+    "Low: little or no harm (entertainment, recipe, public service, local administrative routine)",
+    "Medium: harm limited to a group or place, reversible (bill, municipal fee, local political dispute)",
+    "High: widespread or hard-to-reverse harm (multi-million fraud, environmental disaster, institutional crisis, reputation of public figures)",
+    "Critical: risk to the life or health of many people, or to the electoral process (health alert, evacuation, ongoing disaster, panic)",
 ]
 
 CONTESTABLE_INSTRUCTIONS = (
-    "O conteúdo traz ao menos uma afirmação contestável: sem fonte clara, atribuída só a "
-    "redes sociais ou boatos, com dado ou citação duvidosa, ou que contradiz o que se sabe. "
-    "Notícia factual atribuída a órgão oficial ou fonte identificada, sem nada duvidoso, "
-    "NÃO é contestável."
+    "The content makes at least one contestable claim: without a clear source, attributed "
+    "only to social media or rumors, with doubtful data or quotes, or contradicting what is "
+    "known. Factual news attributed to an official body or an identified source, with "
+    "nothing doubtful, is NOT contestable."
 )
 
 CHECKABLE_INSTRUCTIONS = (
-    "O conteúdo contém ao menos uma afirmação factual específica que pode ser verificada "
-    "como verdadeira ou falsa (um dado, número, declaração atribuída a alguém ou "
-    "acontecimento), e não apenas opinião, receita, serviço ou entretenimento."
+    "The content contains at least one specific factual claim that can be checked as true "
+    "or false (a figure, number, statement attributed to someone or event), not just "
+    "opinion, recipe, public service or entertainment."
 )
 
 # Probability at or above which a boolean answer counts as "yes"
 BOOLEAN_THRESHOLD = 0.5
 
 # Final band by harm band, fixed before seeing results.
-# Harm Crítica: Crítica if contestable, otherwise Alta. Harm Alta: Alta if contestable,
-# otherwise Média. Harm Média: Média if contestable, otherwise Baixa. Harm Baixa: Baixa.
+# Harm Critical: Critical if contestable, otherwise High. Harm High: High if contestable,
+# otherwise Medium. Harm Medium: Medium if contestable, otherwise Low. Harm Low: Low.
 PRIORITY_MATRIX = {
-    "contestable": [BAIXA, MEDIA, ALTA, CRITICA],
-    "not_contestable": [BAIXA, BAIXA, MEDIA, ALTA],
+    "contestable": [LOW, MEDIUM, HIGH, CRITICAL],
+    "not_contestable": [LOW, LOW, MEDIUM, HIGH],
 }
 
 # Reach matrix: (minimum followers, band adjustment), checked from the highest minimum
@@ -70,19 +69,19 @@ REACH_THRESHOLDS: List[tuple] = []
 # Sub-band by the offset of the expected harm score from its most likely level:
 # below -SUB_BAND_EDGE -> _1, above +SUB_BAND_EDGE -> _3, otherwise _2
 SUB_BAND_EDGE = 1 / 6
-SEVERITY_PREFIX = {BAIXA: "low", MEDIA: "medium", ALTA: "high"}
+SEVERITY_PREFIX = {LOW: "low", MEDIUM: "medium", HIGH: "high"}
 
 
 IMPACT_AREA_INSTRUCTIONS = (
-    "Você é triador de uma agência de checagem de fatos brasileira. Escolha a área de "
-    "impacto PRINCIPAL deste conteúdo: a área da sociedade que seria mais afetada se o que "
-    "ele afirma fosse falso. Escolha \"Outros\" só se nenhuma das outras áreas se aplicar."
+    "You are a triage analyst at a Brazilian fact-checking agency. Choose the MAIN impact "
+    "area of this content: the area of society that would be most affected if what it "
+    "claims were false. Choose \"Outros\" only if none of the other areas applies."
 )
 
 
 def text_state(text: str) -> Dict[str, str]:
-    """What Jev sees: the VR text only, as in the feasibility test."""
-    return {"denuncia": (text or "")[:MAX_TEXT_CHARS]}
+    """What Jev sees: the VR text only."""
+    return {"verification_request": (text or "")[:MAX_TEXT_CHARS]}
 
 
 def impact_area_questions(options: List[str]) -> Dict[str, Dict[str, Any]]:
@@ -149,8 +148,8 @@ def sub_band(harm_probabilities: List[float]) -> int:
 
 
 def to_severity(band: int, sub: int) -> str:
-    """SeverityEnum value. Crítica has no sub-bands."""
-    if band == CRITICA:
+    """SeverityEnum value. Critical has no sub-bands."""
+    if band == CRITICAL:
         return "critical"
     return f"{SEVERITY_PREFIX[band]}_{sub}"
 
@@ -172,13 +171,13 @@ def compute_severity(
 
     if not checkable:
         # Nothing to check: reach does not raise it
-        matrix_band = BAIXA
+        matrix_band = LOW
         reach = 0
     else:
         matrix_band = PRIORITY_MATRIX["contestable" if contestable else "not_contestable"][harm_band]
         reach = reach_adjustment(personalities or [], reach_thresholds)
 
-    band = max(BAIXA, min(CRITICA, matrix_band + reach))
+    band = max(LOW, min(CRITICAL, matrix_band + reach))
     sub = sub_band(harm_probabilities)
 
     return {

@@ -39,39 +39,40 @@ backend sends. It sees only the VR text (truncated to 6,000 characters).
 
 ## Severity
 
-Jev answers three questions about the VR text only (rubric v3, from the feasibility test):
+Jev answers three questions about the VR text only. The questions are in English; the VR text
+and the impact area options stay in Portuguese.
 
 | Question | Type | Meaning |
 |---|---|---|
-| `harm` | score, 4 levels | Harm if the content were false: Baixa, Média, Alta, Crítica |
+| `harm` | score, 4 levels | Harm if the content were false: Low, Medium, High, Critical |
 | `contestable` | boolean | Has at least one doubtful claim (no clear source, rumor, dubious data) |
 | `checkable` | boolean | Has at least one specific factual claim that can be checked |
 
 Fixed code in `services/jev_rubric.py` turns the answers into a `SeverityEnum` value:
 
-1. **v3 matrix:** no checkable claim → Baixa. Otherwise, harm × contestable:
+1. **Priority matrix:** no checkable claim → Low. Otherwise, harm × contestable:
 
    | Harm | Contestable | Not contestable |
    |---|---|---|
-   | Baixa | Baixa | Baixa |
-   | Média | Média | Baixa |
-   | Alta | Alta | Média |
-   | Crítica | Crítica | Alta |
+   | Low | Low | Low |
+   | Medium | Medium | Low |
+   | High | High | Medium |
+   | Critical | Critical | High |
 
 2. **Reach matrix:** adjusts the band by −1, 0 or +1 from the followers of the personalities
    (Wikidata). Uses the personality with the most followers; missing data (0 followers or no
    Wikidata ID) is unknown reach, so no adjustment. **Neutral for now** (`REACH_THRESHOLDS = []`):
    thresholds will be defined with the fact-checkers. Not applied when nothing is checkable.
-3. **Limit:** the band stays between Baixa and Crítica.
+3. **Limit:** the band stays between Low and Critical.
 4. **Sub-band:** compares the expected harm score with the most likely harm level. More than 1/6
-   below → `_1`, more than 1/6 above → `_3`, otherwise `_2`. Crítica is always `critical`.
+   below → `_1`, more than 1/6 above → `_3`, otherwise `_2`. Critical is always `critical`.
 
 | Band | SeverityEnum |
 |---|---|
-| Baixa | `low_1`, `low_2`, `low_3` |
-| Média | `medium_1`, `medium_2`, `medium_3` |
-| Alta | `high_1`, `high_2`, `high_3` |
-| Crítica | `critical` |
+| Low | `low_1`, `low_2`, `low_3` |
+| Medium | `medium_1`, `medium_2`, `medium_3` |
+| High | `high_1`, `high_2`, `high_3` |
+| Critical | `critical` |
 
 The impact area does not affect the severity on Jev: the area comes from the same text, and the
 harm question already considers the subject. The Wikidata enrichment of personalities, topics
